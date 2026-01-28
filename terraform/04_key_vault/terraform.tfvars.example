@@ -1,0 +1,10 @@
+resource_group_name = "rg-mlops-cancer-kind-albacore"
+location = "eastus2"
+key_vault_name = null
+key_vault_name_prefix = "kvmlopscancer"
+sku_name = "standard"
+enable_rbac_authorization = true
+public_network_access_enabled = true
+soft_delete_retention_days = 7
+purge_protection_enabled = false
+key_vault_admin_object_id = null

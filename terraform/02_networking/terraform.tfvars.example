@@ -1,0 +1,11 @@
+resource_group_name = "rg-mlops-cancer-kind-albacore"
+location = "eastus2"
+vnet_name = null
+vnet_name_prefix = "vnet-mlops-cancer"
+address_space = ["10.40.0.0/16"]
+subnet_prefixes = {
+  default = "10.40.1.0/24"
+  private_endpoints = "10.40.2.0/24"
+  aml = "10.40.3.0/24"
+  adf = "10.40.4.0/24"
+}

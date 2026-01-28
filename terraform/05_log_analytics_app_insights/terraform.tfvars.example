@@ -1,0 +1,9 @@
+resource_group_name = "rg-mlops-cancer-kind-albacore"
+location = "eastus2"
+log_analytics_name = null
+log_analytics_name_prefix = "law-mlops-cancer"
+sku = "PerGB2018"
+retention_in_days = 30
+app_insights_name = null
+app_insights_name_prefix = "appi-mlops-cancer"
+application_type = "web"
