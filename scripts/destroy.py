@@ -722,69 +722,74 @@ def main():
         modules = [TERRAFORM_DIR / "19_storage_rbac"]
 
     for module_dir in modules:
-        if module_dir.name == "15_machine_learning_workspace":
-            write_aml_workspace_tfvars()
-        if module_dir.name == "16_aml_storage_account":
-            write_aml_storage_tfvars()
-        if module_dir.name == "17_aml_compute":
-            write_aml_compute_tfvars()
-        if module_dir.name == "18_acr_rbac":
-            # Needs ACR + AML outputs
-            acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
-            compute_outputs = TERRAFORM_DIR / "17_aml_compute" / "outputs.json"
-            acr_id = read_outputs_value(acr_outputs, "acr_id")
-            compute_principal_id = read_outputs_value(compute_outputs, "compute_principal_id")
-            if not acr_id or not compute_principal_id:
-                raise RuntimeError("Missing outputs for ACR or AML compute. Deploy those first.")
-            write_tfvars(
-                module_dir / "terraform.tfvars",
-                [
-                    ("acr_id", acr_id),
-                    ("compute_principal_id", compute_principal_id),
-                ],
-            )
-        if module_dir.name == "19_storage_rbac":
-            storage_outputs = TERRAFORM_DIR / "03_storage_account" / "outputs.json"
-            compute_outputs = TERRAFORM_DIR / "17_aml_compute" / "outputs.json"
-            storage_account_id = read_outputs_value(storage_outputs, "storage_account_id")
-            compute_principal_id = read_outputs_value(compute_outputs, "compute_principal_id")
-            if not storage_account_id or not compute_principal_id:
-                raise RuntimeError("Missing outputs for storage or AML compute. Deploy those first.")
-            write_tfvars(
-                module_dir / "terraform.tfvars",
-                [
-                    ("storage_account_id", storage_account_id),
-                    ("compute_principal_id", compute_principal_id),
-                ],
-            )
-        if module_dir.name == "14_adf_pipeline_master":
-            write_adf_pipeline_master_tfvars()
-        if module_dir.name == "13_adf_pipeline_gold_dataflow":
-            write_adf_pipeline_gold_tfvars()
-        if module_dir.name == "12_adf_dataflow_silver_gold":
-            write_adf_dataflow_gold_tfvars()
-        if module_dir.name == "11_adf_pipeline_silver_dataflow":
-            write_adf_pipeline_silver_tfvars()
-        if module_dir.name == "10_adf_dataflow_bronze_silver":
-            write_adf_dataflow_tfvars()
-        if module_dir.name == "09_adf_pipeline_http":
-            write_adf_pipeline_http_tfvars()
-        if module_dir.name == "08_adf_linked_services":
-            write_adf_linked_services_tfvars()
-        if module_dir.name == "07_data_factory":
-            write_data_factory_tfvars()
-        if module_dir.name == "05_log_analytics_app_insights":
-            write_log_analytics_tfvars()
-        if module_dir.name == "04_key_vault":
-            write_key_vault_tfvars()
-        if module_dir.name == "06_container_registry":
-            write_acr_tfvars()
-        if module_dir.name == "03_storage_account":
-            write_storage_account_tfvars()
-        if module_dir.name == "02_networking":
-            write_networking_tfvars()
-        if module_dir.name == "01_resource_group":
-            write_resource_group_tfvars()
+        try:
+            if module_dir.name == "15_machine_learning_workspace":
+                write_aml_workspace_tfvars()
+            if module_dir.name == "16_aml_storage_account":
+                write_aml_storage_tfvars()
+            if module_dir.name == "17_aml_compute":
+                write_aml_compute_tfvars()
+            if module_dir.name == "18_acr_rbac":
+                # Needs ACR + AML outputs
+                acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
+                compute_outputs = TERRAFORM_DIR / "17_aml_compute" / "outputs.json"
+                acr_id = read_outputs_value(acr_outputs, "acr_id")
+                compute_principal_id = read_outputs_value(compute_outputs, "compute_principal_id")
+                if not acr_id or not compute_principal_id:
+                    raise RuntimeError("Missing outputs for ACR or AML compute. Deploy those first.")
+                write_tfvars(
+                    module_dir / "terraform.tfvars",
+                    [
+                        ("acr_id", acr_id),
+                        ("compute_principal_id", compute_principal_id),
+                    ],
+                )
+            if module_dir.name == "19_storage_rbac":
+                storage_outputs = TERRAFORM_DIR / "03_storage_account" / "outputs.json"
+                compute_outputs = TERRAFORM_DIR / "17_aml_compute" / "outputs.json"
+                storage_account_id = read_outputs_value(storage_outputs, "storage_account_id")
+                compute_principal_id = read_outputs_value(compute_outputs, "compute_principal_id")
+                if not storage_account_id or not compute_principal_id:
+                    raise RuntimeError("Missing outputs for storage or AML compute. Deploy those first.")
+                write_tfvars(
+                    module_dir / "terraform.tfvars",
+                    [
+                        ("storage_account_id", storage_account_id),
+                        ("compute_principal_id", compute_principal_id),
+                    ],
+                )
+            if module_dir.name == "14_adf_pipeline_master":
+                write_adf_pipeline_master_tfvars()
+            if module_dir.name == "13_adf_pipeline_gold_dataflow":
+                write_adf_pipeline_gold_tfvars()
+            if module_dir.name == "12_adf_dataflow_silver_gold":
+                write_adf_dataflow_gold_tfvars()
+            if module_dir.name == "11_adf_pipeline_silver_dataflow":
+                write_adf_pipeline_silver_tfvars()
+            if module_dir.name == "10_adf_dataflow_bronze_silver":
+                write_adf_dataflow_tfvars()
+            if module_dir.name == "09_adf_pipeline_http":
+                write_adf_pipeline_http_tfvars()
+            if module_dir.name == "08_adf_linked_services":
+                write_adf_linked_services_tfvars()
+            if module_dir.name == "07_data_factory":
+                write_data_factory_tfvars()
+            if module_dir.name == "05_log_analytics_app_insights":
+                write_log_analytics_tfvars()
+            if module_dir.name == "04_key_vault":
+                write_key_vault_tfvars()
+            if module_dir.name == "06_container_registry":
+                write_acr_tfvars()
+            if module_dir.name == "03_storage_account":
+                write_storage_account_tfvars()
+            if module_dir.name == "02_networking":
+                write_networking_tfvars()
+            if module_dir.name == "01_resource_group":
+                write_resource_group_tfvars()
+        except RuntimeError as exc:
+            print(f"Skipping {module_dir.name}: {exc}")
+            continue
+
         terraform_destroy(module_dir)
         cleanup_outputs(module_dir)
 

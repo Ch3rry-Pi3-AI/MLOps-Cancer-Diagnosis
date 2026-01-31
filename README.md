@@ -52,6 +52,24 @@ az account show
 uv run .\scripts\deploy.py
 ```
 
+## GitHub Actions (CI/CD)
+Set the service principal secret so workflows can authenticate to Azure:
+
+1) Create service principal JSON:
+```powershell
+az ad sp create-for-rbac --name "gh-mlops-cancer" --role contributor --scopes /subscriptions/<subscription-id> --sdk-auth
+```
+
+2) In GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+   - Name: `AZURE_CREDENTIALS`
+   - Value: paste the **entire JSON** output from the command above.
+
+Workflows:
+- `.github/workflows/ci.yml`
+- `.github/workflows/deploy_dev.yml`
+- `.github/workflows/deploy_prod.yml`
+- `.github/workflows/destroy.yml` (manual with confirm)
+
 ## Resource Naming
 Resource names use a clear prefix plus a random animal suffix for uniqueness, for example:
 `rg-mlops-cancer-bright-otter`

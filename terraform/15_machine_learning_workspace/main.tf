@@ -27,7 +27,9 @@ resource "random_pet" "aml" {
 }
 
 locals {
-  workspace_name = var.workspace_name != null ? var.workspace_name : "${var.workspace_name_prefix}-${random_pet.aml.id}"
+  workspace_name_raw = var.workspace_name != null ? var.workspace_name : "${var.workspace_name_prefix}-${random_pet.aml.id}"
+  workspace_name_sanitized = replace(lower(local.workspace_name_raw), "_", "-")
+  workspace_name = substr(local.workspace_name_sanitized, 0, 33)
 }
 
 resource "azurerm_machine_learning_workspace" "main" {

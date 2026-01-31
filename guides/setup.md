@@ -25,6 +25,18 @@ az account set --subscription "<subscription-id-or-name>"
 az account show
 ```
 
+## GitHub Actions (Secrets)
+Create a service principal and add it as a GitHub Actions secret.
+
+1) Generate JSON credentials:
+```powershell
+az ad sp create-for-rbac --name "gh-mlops-cancer" --role contributor --scopes /subscriptions/<subscription-id> --sdk-auth
+```
+
+2) GitHub → **Settings → Secrets and variables → Actions → New repository secret**:
+   - Name: `AZURE_CREDENTIALS`
+   - Value: paste the **entire JSON** output.
+
 ## Terraform Setup
 Check if Terraform is installed and on PATH:
 

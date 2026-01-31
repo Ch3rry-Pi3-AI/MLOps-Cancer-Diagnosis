@@ -18,4 +18,5 @@ resource "azurerm_role_assignment" "acr_pull" {
   role_definition_name = "AcrPull"
   principal_id         = var.compute_principal_id
   skip_service_principal_aad_check = true
+  name                 = uuidv5("6ba7b810-9dad-11d1-80b4-00c04fd430c8", "${var.acr_id}|${var.compute_principal_id}")
 }
