@@ -715,6 +715,32 @@ def write_outputs(module_dir):
     (module_dir / "outputs.json").write_text(output + "\n", encoding="utf-8")
 
 
+def terraform_state_has(module_dir, address):
+    terraform_exe = get_terraform_exe()
+    try:
+        output = subprocess.check_output([terraform_exe, "state", "list"], cwd=module_dir, text=True)
+    except subprocess.CalledProcessError:
+        return False
+    return any(line.strip() == address for line in output.splitlines())
+
+
+def terraform_import(module_dir, address, resource_id):
+    terraform_exe = get_terraform_exe()
+    run([terraform_exe, "import", address, resource_id], cwd=module_dir)
+
+
+def ensure_role_assignment_import(module_dir, address, principal_id, scope):
+    if terraform_state_has(module_dir, address):
+        return
+    az_cmd = get_az_cmd()
+    result = subprocess.check_output(
+        [az_cmd, "role", "assignment", "list", "--assignee", principal_id, "--scope", scope, "--query", "[0].id", "-o", "tsv"],
+        text=True,
+    ).strip()
+    if result:
+        terraform_import(module_dir, address, result)
+
+
 def sync_aml_workspace_keys():
     rg_outputs = TERRAFORM_DIR / "01_resource_group" / "outputs.json"
     aml_outputs = TERRAFORM_DIR / "15_machine_learning_workspace" / "outputs.json"

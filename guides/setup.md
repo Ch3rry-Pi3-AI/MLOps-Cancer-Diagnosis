@@ -33,7 +33,7 @@ Create a service principal and add it as a GitHub Actions secret.
 az ad sp create-for-rbac --name "gh-mlops-cancer" --role contributor --scopes /subscriptions/<subscription-id> --sdk-auth
 ```
 
-2) GitHub → **Settings → Secrets and variables → Actions → New repository secret**:
+2) GitHub -> **Settings -> Secrets and variables -> Actions -> New repository secret**:
    - Name: `AZURE_CREDENTIALS`
    - Value: paste the **entire JSON** output.
 
@@ -41,6 +41,7 @@ az ad sp create-for-rbac --name "gh-mlops-cancer" --role contributor --scopes /s
 ```powershell
 az role assignment create --assignee <clientId> --role "User Access Administrator" --scope /subscriptions/<subscription-id>
 ```
+Note: this command does **not** change `AZURE_CREDENTIALS`. You do not need to update the GitHub secret after granting this role.
 
 ## Terraform Setup
 Check if Terraform is installed and on PATH:

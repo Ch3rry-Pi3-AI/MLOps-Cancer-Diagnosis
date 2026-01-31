@@ -60,7 +60,7 @@ Set the service principal secret so workflows can authenticate to Azure:
 az ad sp create-for-rbac --name "gh-mlops-cancer" --role contributor --scopes /subscriptions/<subscription-id> --sdk-auth
 ```
 
-2) In GitHub: **Settings → Secrets and variables → Actions → New repository secret**
+2) In GitHub: **Settings -> Secrets and variables -> Actions -> New repository secret**
    - Name: `AZURE_CREDENTIALS`
    - Value: paste the **entire JSON** output from the command above.
 
@@ -68,6 +68,7 @@ az ad sp create-for-rbac --name "gh-mlops-cancer" --role contributor --scopes /s
 ```powershell
 az role assignment create --assignee <clientId> --role "User Access Administrator" --scope /subscriptions/<subscription-id>
 ```
+Note: this command does **not** change `AZURE_CREDENTIALS`. You do not need to update the GitHub secret after granting this role.
 
 Workflows:
 - `.github/workflows/ci.yml`
