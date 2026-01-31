@@ -726,6 +726,7 @@ def terraform_state_has(module_dir, address):
 
 def terraform_import(module_dir, address, resource_id):
     terraform_exe = get_terraform_exe()
+    run([terraform_exe, "init", "-upgrade"], cwd=module_dir)
     run([terraform_exe, "import", address, resource_id], cwd=module_dir)
 
 
