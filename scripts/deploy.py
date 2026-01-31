@@ -239,6 +239,9 @@ def write_resource_group_tfvars():
 
 def write_backend_tfvars():
     backend_dir = TERRAFORM_DIR / "00_backend"
+    container_name = env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])
+    if container_name is None:
+        container_name = DEFAULTS["BACKEND_CONTAINER_NAME"]
     write_tfvars(
         backend_dir / "terraform.tfvars",
         [
@@ -247,7 +250,7 @@ def write_backend_tfvars():
             ("location", env_or_default("LOCATION", DEFAULTS["LOCATION"])),
             ("storage_account_name", env_or_default("BACKEND_STORAGE_ACCOUNT_NAME", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME"])),
             ("storage_account_name_prefix", env_or_default("BACKEND_STORAGE_ACCOUNT_NAME_PREFIX", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME_PREFIX"])),
-            ("container_name", env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])),
+            ("container_name", container_name),
         ],
     )
 
