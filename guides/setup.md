@@ -37,6 +37,11 @@ az ad sp create-for-rbac --name "gh-mlops-cancer" --role contributor --scopes /s
    - Name: `AZURE_CREDENTIALS`
    - Value: paste the **entire JSON** output.
 
+3) Grant the service principal RBAC assignment rights (one-time):
+```powershell
+az role assignment create --assignee <clientId> --role "User Access Administrator" --scope /subscriptions/<subscription-id>
+```
+
 ## Terraform Setup
 Check if Terraform is installed and on PATH:
 
