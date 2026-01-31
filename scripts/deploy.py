@@ -889,8 +889,32 @@ def main():
             write_aml_compute_tfvars()
         if module_dir.name == "18_acr_rbac":
             write_acr_rbac_tfvars()
+            acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
+            compute_outputs = TERRAFORM_DIR / "17_aml_compute" / "outputs.json"
+            acr_id = read_outputs_value(acr_outputs, "acr_id")
+            compute_principal_id = read_outputs_value(compute_outputs, "compute_principal_id")
+            if not acr_id or not compute_principal_id:
+                raise RuntimeError("Missing outputs for ACR or AML compute. Deploy those first.")
+            ensure_role_assignment_import(
+                module_dir,
+                "azurerm_role_assignment.acr_pull",
+                compute_principal_id,
+                acr_id,
+            )
         if module_dir.name == "19_storage_rbac":
             write_storage_rbac_tfvars()
+            storage_outputs = TERRAFORM_DIR / "03_storage_account" / "outputs.json"
+            compute_outputs = TERRAFORM_DIR / "17_aml_compute" / "outputs.json"
+            storage_account_id = read_outputs_value(storage_outputs, "storage_account_id")
+            compute_principal_id = read_outputs_value(compute_outputs, "compute_principal_id")
+            if not storage_account_id or not compute_principal_id:
+                raise RuntimeError("Missing outputs for storage or AML compute. Deploy those first.")
+            ensure_role_assignment_import(
+                module_dir,
+                "azurerm_role_assignment.storage_blob_contributor",
+                compute_principal_id,
+                storage_account_id,
+            )
         terraform_apply(module_dir)
         write_outputs(module_dir)
 
