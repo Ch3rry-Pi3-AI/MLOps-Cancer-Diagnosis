@@ -71,6 +71,12 @@ az role assignment create --assignee <clientId> --role "User Access Administrato
 ```
 Note: this command does **not** change `AZURE_CREDENTIALS`. You do not need to update the GitHub secret after granting this role.
 
+4) Remote state (required for GitHub Actions deploy/destroy):
+   - Add secrets:
+     - `BACKEND_RESOURCE_GROUP_NAME` (e.g., `rg-mlops-cancer-tfstate`)
+     - `BACKEND_STORAGE_ACCOUNT_NAME` (must be globally unique, lower-case, 3-24 chars)
+     - Optional: `BACKEND_CONTAINER_NAME` (default `tfstate`)
+
 Workflows:
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy_dev.yml`
@@ -84,6 +90,7 @@ Resource names use a clear prefix plus a random animal suffix for uniqueness, fo
 Override by setting explicit name variables or adjusting the prefixes in `.env` or the scripts.
 
 ## Project Structure
+- `terraform/00_backend`: Remote Terraform state (storage account + container)
 - `terraform/01_resource_group`: Azure resource group
 - `terraform/02_networking`: VNet + subnets (foundation for private endpoints)
 - `terraform/03_storage_account`: ADLS Gen2 storage account + containers
@@ -150,6 +157,7 @@ python scripts\deploy.py --skip-adf-run
 Destroy:
 ```powershell
 python scripts\destroy.py
+python scripts\destroy.py --destroy-backend
 python scripts\destroy.py --rg-only
 python scripts\destroy.py --networking-only
 python scripts\destroy.py --storage-only
@@ -173,6 +181,7 @@ python scripts\destroy.py --storage-rbac-only
 
 ## Outputs
 After each apply, module outputs are written to the module folder, for example:
+- `terraform/00_backend/outputs.json`
 - `terraform/01_resource_group/outputs.json`
 - `terraform/02_networking/outputs.json`
 - `terraform/03_storage_account/outputs.json`

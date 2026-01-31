@@ -12,6 +12,9 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      BACKEND_RESOURCE_GROUP_NAME: ${{ secrets.BACKEND_RESOURCE_GROUP_NAME }}
+      BACKEND_STORAGE_ACCOUNT_NAME: ${{ secrets.BACKEND_STORAGE_ACCOUNT_NAME }}
+      BACKEND_CONTAINER_NAME: ${{ secrets.BACKEND_CONTAINER_NAME }}
       AML_TRAIN_IMAGE_TAG: "0.1.0"
       AML_COMPUTE_NAME: "cpu-cluster"
     steps:
@@ -47,7 +50,81 @@ jobs:
         run: uv sync
 
       - name: Deploy infra
-        run: uv run python scripts/deploy.py
+        run: uv run python scripts/deploy.py --skip-adf-run
+
+      - name: Run ADF master pipeline and wait for gold data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def get(path, key):
+              data = json.loads(Path(path).read_text(encoding="utf-8"))
+              return data[key]["value"]
+
+          rg = get("terraform/01_resource_group/outputs.json", "resource_group_name")
+          adf = get("terraform/07_data_factory/outputs.json", "data_factory_name")
+          pipe = get("terraform/14_adf_pipeline_master/outputs.json", "pipeline_name")
+          storage = get("terraform/03_storage_account/outputs.json", "storage_account_name")
+          key = get("terraform/03_storage_account/outputs.json", "storage_account_primary_access_key")
+
+          env_path = Path(os.environ["GITHUB_ENV"])
+          with env_path.open("a", encoding="utf-8") as f:
+              f.write(f"RG_NAME={rg}\n")
+              f.write(f"ADF_NAME={adf}\n")
+              f.write(f"ADF_PIPELINE={pipe}\n")
+              f.write(f"STORAGE_NAME={storage}\n")
+              f.write(f"STORAGE_KEY={key}\n")
+          PY
+
+          run_id=$(az datafactory pipeline create-run \
+            --resource-group "$RG_NAME" \
+            --factory-name "$ADF_NAME" \
+            --name "$ADF_PIPELINE" \
+            --query runId -o tsv)
+          echo "ADF run id: $run_id"
+
+          for i in {1..60}; do
+            status=$(az datafactory pipeline-run show \
+              --resource-group "$RG_NAME" \
+              --factory-name "$ADF_NAME" \
+              --run-id "$run_id" \
+              --query status -o tsv)
+            echo "ADF status: $status"
+            if [[ "$status" == "Succeeded" ]]; then
+              break
+            fi
+            if [[ "$status" == "Failed" || "$status" == "Cancelled" ]]; then
+              echo "ADF pipeline failed: $status"
+              exit 1
+            fi
+            sleep 30
+          done
+
+          found=0
+          for i in {1..20}; do
+            count=$(az storage fs file list \
+              --account-name "$STORAGE_NAME" \
+              --account-key "$STORAGE_KEY" \
+              --file-system gold \
+              --path breast_cancer/features \
+              --query "length([?contains(name, '.parquet')])" -o tsv || echo 0)
+            if [[ "${count:-0}" -gt 0 ]]; then
+              found=1
+              echo "Gold data present ($count parquet files)."
+              break
+            fi
+            echo "Waiting for gold data..."
+            sleep 15
+          done
+
+          if [[ "$found" -ne 1 ]]; then
+            echo "Gold data not found after waiting."
+            exit 1
+          fi
 
       - name: Build/push train image (Docker)
         run: uv run python scripts/deploy.py --docker-build-train-image

@@ -9,6 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 TERRAFORM_DIR = ROOT / "terraform"
 
 DEFAULTS = {
+    "BACKEND_RESOURCE_GROUP_NAME": None,
+    "BACKEND_RESOURCE_GROUP_NAME_PREFIX": "rg-mlops-cancer-tfstate",
+    "BACKEND_STORAGE_ACCOUNT_NAME": None,
+    "BACKEND_STORAGE_ACCOUNT_NAME_PREFIX": "stmlopstfstate",
+    "BACKEND_CONTAINER_NAME": "tfstate",
     "RESOURCE_GROUP_NAME": None,
     "RESOURCE_GROUP_NAME_PREFIX": "rg-mlops-cancer",
     "LOCATION": "eastus2",
@@ -230,6 +235,69 @@ def write_resource_group_tfvars():
             ("location", env_or_default("LOCATION", DEFAULTS["LOCATION"])),
         ],
     )
+
+
+def write_backend_tfvars():
+    backend_dir = TERRAFORM_DIR / "00_backend"
+    write_tfvars(
+        backend_dir / "terraform.tfvars",
+        [
+            ("backend_resource_group_name", env_or_default("BACKEND_RESOURCE_GROUP_NAME", DEFAULTS["BACKEND_RESOURCE_GROUP_NAME"])),
+            ("backend_resource_group_name_prefix", env_or_default("BACKEND_RESOURCE_GROUP_NAME_PREFIX", DEFAULTS["BACKEND_RESOURCE_GROUP_NAME_PREFIX"])),
+            ("location", env_or_default("LOCATION", DEFAULTS["LOCATION"])),
+            ("storage_account_name", env_or_default("BACKEND_STORAGE_ACCOUNT_NAME", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME"])),
+            ("storage_account_name_prefix", env_or_default("BACKEND_STORAGE_ACCOUNT_NAME_PREFIX", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME_PREFIX"])),
+            ("container_name", env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])),
+        ],
+    )
+
+
+def ensure_backend_container(backend_rg, backend_storage, container_name):
+    az_cmd = get_az_cmd()
+    key = subprocess.check_output(
+        [
+            az_cmd,
+            "storage",
+            "account",
+            "keys",
+            "list",
+            "--resource-group",
+            backend_rg,
+            "--account-name",
+            backend_storage,
+            "--query",
+            "[0].value",
+            "-o",
+            "tsv",
+        ],
+        text=True,
+    ).strip()
+    if not key:
+        raise RuntimeError("Unable to read storage account key for backend.")
+    run(
+        [
+            az_cmd,
+            "storage",
+            "container",
+            "create",
+            "--name",
+            container_name,
+            "--account-name",
+            backend_storage,
+            "--account-key",
+            key,
+        ]
+    )
+
+
+def write_backend_outputs_from_env(backend_rg, backend_storage, backend_container):
+    outputs = {
+        "backend_resource_group_name": {"value": backend_rg},
+        "backend_storage_account_name": {"value": backend_storage},
+        "backend_container_name": {"value": backend_container},
+    }
+    outputs_path = TERRAFORM_DIR / "00_backend" / "outputs.json"
+    outputs_path.write_text(json.dumps(outputs, indent=2) + "\n", encoding="utf-8")
 
 
 def write_storage_account_tfvars():
@@ -703,12 +771,6 @@ def write_storage_rbac_tfvars():
     )
 
 
-def terraform_apply(module_dir):
-    terraform_exe = get_terraform_exe()
-    run([terraform_exe, "init", "-upgrade"], cwd=module_dir)
-    run([terraform_exe, "apply", "-auto-approve"], cwd=module_dir)
-
-
 def write_outputs(module_dir):
     terraform_exe = get_terraform_exe()
     output = subprocess.check_output([terraform_exe, "output", "-json"], cwd=module_dir, text=True)
@@ -724,13 +786,7 @@ def terraform_state_has(module_dir, address):
     return any(line.strip() == address for line in output.splitlines())
 
 
-def terraform_import(module_dir, address, resource_id):
-    terraform_exe = get_terraform_exe()
-    run([terraform_exe, "init", "-upgrade"], cwd=module_dir)
-    run([terraform_exe, "import", address, resource_id], cwd=module_dir)
-
-
-def ensure_role_assignment_import(module_dir, address, principal_id, scope):
+def ensure_role_assignment_import(module_dir, address, principal_id, scope, backend_config=None):
     if terraform_state_has(module_dir, address):
         return
     az_cmd = get_az_cmd()
@@ -739,7 +795,53 @@ def ensure_role_assignment_import(module_dir, address, principal_id, scope):
         text=True,
     ).strip()
     if result:
-        terraform_import(module_dir, address, result)
+        terraform_import(module_dir, address, result, backend_config)
+
+
+def backend_config_for(module_dir):
+    backend_outputs = TERRAFORM_DIR / "00_backend" / "outputs.json"
+    backend_rg = read_outputs_value(backend_outputs, "backend_resource_group_name") or env_or_default(
+        "BACKEND_RESOURCE_GROUP_NAME", None
+    )
+    backend_storage = read_outputs_value(backend_outputs, "backend_storage_account_name") or env_or_default(
+        "BACKEND_STORAGE_ACCOUNT_NAME", None
+    )
+    backend_container = read_outputs_value(backend_outputs, "backend_container_name") or env_or_default(
+        "BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"]
+    )
+    if not backend_rg or not backend_storage or not backend_container:
+        return None
+    return {
+        "resource_group_name": backend_rg,
+        "storage_account_name": backend_storage,
+        "container_name": backend_container,
+        "key": f"{module_dir.name}.tfstate",
+    }
+
+
+def terraform_init(module_dir, backend_config=None):
+    terraform_exe = get_terraform_exe()
+    cmd = [terraform_exe, "init", "-upgrade"]
+    if backend_config:
+        cmd.extend([
+            f"-backend-config=resource_group_name={backend_config['resource_group_name']}",
+            f"-backend-config=storage_account_name={backend_config['storage_account_name']}",
+            f"-backend-config=container_name={backend_config['container_name']}",
+            f"-backend-config=key={backend_config['key']}",
+        ])
+    run(cmd, cwd=module_dir)
+
+
+def terraform_apply(module_dir, backend_config=None):
+    terraform_exe = get_terraform_exe()
+    terraform_init(module_dir, backend_config)
+    run([terraform_exe, "apply", "-auto-approve"], cwd=module_dir)
+
+
+def terraform_import(module_dir, address, resource_id, backend_config=None):
+    terraform_exe = get_terraform_exe()
+    terraform_init(module_dir, backend_config)
+    run([terraform_exe, "import", address, resource_id], cwd=module_dir)
 
 
 def sync_aml_workspace_keys():
@@ -811,6 +913,7 @@ def main():
     load_env_file(ROOT / ".env")
 
     modules = [
+        TERRAFORM_DIR / "00_backend",
         TERRAFORM_DIR / "01_resource_group",
         TERRAFORM_DIR / "02_networking",
         TERRAFORM_DIR / "03_storage_account",
@@ -875,6 +978,22 @@ def main():
         modules = [TERRAFORM_DIR / "19_storage_rbac"]
 
     for module_dir in modules:
+        backend_config = None
+        if module_dir.name == "00_backend":
+            write_backend_tfvars()
+            backend_rg = env_or_default("BACKEND_RESOURCE_GROUP_NAME", None)
+            backend_storage = env_or_default("BACKEND_STORAGE_ACCOUNT_NAME", None)
+            backend_container = env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])
+            if os.environ.get("GITHUB_ACTIONS") == "true" and backend_rg and backend_storage:
+                ensure_backend_container(backend_rg, backend_storage, backend_container)
+                write_backend_outputs_from_env(backend_rg, backend_storage, backend_container)
+                continue
+        else:
+            backend_config = backend_config_for(module_dir)
+            if os.environ.get("GITHUB_ACTIONS") == "true" and backend_config is None:
+                raise RuntimeError(
+                    "BACKEND_RESOURCE_GROUP_NAME and BACKEND_STORAGE_ACCOUNT_NAME must be set in CI to use remote state."
+                )
         if module_dir.name == "01_resource_group":
             write_resource_group_tfvars()
         if module_dir.name == "02_networking":
@@ -922,6 +1041,7 @@ def main():
                 "azurerm_role_assignment.acr_pull",
                 compute_principal_id,
                 acr_id,
+                backend_config,
             )
         if module_dir.name == "19_storage_rbac":
             write_storage_rbac_tfvars()
@@ -936,8 +1056,9 @@ def main():
                 "azurerm_role_assignment.storage_blob_contributor",
                 compute_principal_id,
                 storage_account_id,
+                backend_config,
             )
-        terraform_apply(module_dir)
+        terraform_apply(module_dir, backend_config)
         write_outputs(module_dir)
 
     if args.aml_job_config_only or TERRAFORM_DIR.joinpath("06_container_registry") in modules:

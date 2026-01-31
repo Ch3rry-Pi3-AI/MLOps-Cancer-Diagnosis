@@ -9,6 +9,11 @@ ROOT = Path(__file__).resolve().parents[1]
 TERRAFORM_DIR = ROOT / "terraform"
 
 DEFAULTS = {
+    "BACKEND_RESOURCE_GROUP_NAME": None,
+    "BACKEND_RESOURCE_GROUP_NAME_PREFIX": "rg-mlops-cancer-tfstate",
+    "BACKEND_STORAGE_ACCOUNT_NAME": None,
+    "BACKEND_STORAGE_ACCOUNT_NAME_PREFIX": "stmlopstfstate",
+    "BACKEND_CONTAINER_NAME": "tfstate",
     "RESOURCE_GROUP_NAME": None,
     "RESOURCE_GROUP_NAME_PREFIX": "rg-mlops-cancer",
     "LOCATION": "eastus2",
@@ -213,6 +218,21 @@ def write_resource_group_tfvars():
             ("resource_group_name", env_or_default("RESOURCE_GROUP_NAME", DEFAULTS["RESOURCE_GROUP_NAME"])),
             ("resource_group_name_prefix", env_or_default("RESOURCE_GROUP_NAME_PREFIX", DEFAULTS["RESOURCE_GROUP_NAME_PREFIX"])),
             ("location", env_or_default("LOCATION", DEFAULTS["LOCATION"])),
+        ],
+    )
+
+
+def write_backend_tfvars():
+    backend_dir = TERRAFORM_DIR / "00_backend"
+    write_tfvars(
+        backend_dir / "terraform.tfvars",
+        [
+            ("backend_resource_group_name", env_or_default("BACKEND_RESOURCE_GROUP_NAME", DEFAULTS["BACKEND_RESOURCE_GROUP_NAME"])),
+            ("backend_resource_group_name_prefix", env_or_default("BACKEND_RESOURCE_GROUP_NAME_PREFIX", DEFAULTS["BACKEND_RESOURCE_GROUP_NAME_PREFIX"])),
+            ("location", env_or_default("LOCATION", DEFAULTS["LOCATION"])),
+            ("storage_account_name", env_or_default("BACKEND_STORAGE_ACCOUNT_NAME", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME"])),
+            ("storage_account_name_prefix", env_or_default("BACKEND_STORAGE_ACCOUNT_NAME_PREFIX", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME_PREFIX"])),
+            ("container_name", env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])),
         ],
     )
 
@@ -624,9 +644,43 @@ def write_aml_compute_tfvars():
     )
 
 
-def terraform_destroy(module_dir):
+def backend_config_for(module_dir):
+    backend_outputs = TERRAFORM_DIR / "00_backend" / "outputs.json"
+    backend_rg = read_outputs_value(backend_outputs, "backend_resource_group_name") or env_or_default(
+        "BACKEND_RESOURCE_GROUP_NAME", None
+    )
+    backend_storage = read_outputs_value(backend_outputs, "backend_storage_account_name") or env_or_default(
+        "BACKEND_STORAGE_ACCOUNT_NAME", None
+    )
+    backend_container = read_outputs_value(backend_outputs, "backend_container_name") or env_or_default(
+        "BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"]
+    )
+    if not backend_rg or not backend_storage or not backend_container:
+        return None
+    return {
+        "resource_group_name": backend_rg,
+        "storage_account_name": backend_storage,
+        "container_name": backend_container,
+        "key": f"{module_dir.name}.tfstate",
+    }
+
+
+def terraform_init(module_dir, backend_config=None):
     terraform_exe = get_terraform_exe()
-    run([terraform_exe, "init", "-upgrade"], cwd=module_dir)
+    cmd = [terraform_exe, "init", "-upgrade"]
+    if backend_config:
+        cmd.extend([
+            f"-backend-config=resource_group_name={backend_config['resource_group_name']}",
+            f"-backend-config=storage_account_name={backend_config['storage_account_name']}",
+            f"-backend-config=container_name={backend_config['container_name']}",
+            f"-backend-config=key={backend_config['key']}",
+        ])
+    run(cmd, cwd=module_dir)
+
+
+def terraform_destroy(module_dir, backend_config=None):
+    terraform_exe = get_terraform_exe()
+    terraform_init(module_dir, backend_config)
     run([terraform_exe, "destroy", "-auto-approve"], cwd=module_dir)
 
 
@@ -657,6 +711,7 @@ def main():
     parser.add_argument("--aml-compute-only", action="store_true", help="Destroy only AML compute cluster")
     parser.add_argument("--acr-rbac-only", action="store_true", help="Destroy only ACR RBAC assignment")
     parser.add_argument("--storage-rbac-only", action="store_true", help="Destroy only Storage RBAC assignment")
+    parser.add_argument("--destroy-backend", action="store_true", help="Destroy the Terraform backend resources")
     args = parser.parse_args()
 
     load_env_file(ROOT / ".env")
@@ -682,6 +737,8 @@ def main():
         TERRAFORM_DIR / "02_networking",
         TERRAFORM_DIR / "01_resource_group",
     ]
+    if args.destroy_backend:
+        modules.append(TERRAFORM_DIR / "00_backend")
     if args.rg_only:
         modules = [TERRAFORM_DIR / "01_resource_group"]
     if args.networking_only:
@@ -722,6 +779,15 @@ def main():
         modules = [TERRAFORM_DIR / "19_storage_rbac"]
 
     for module_dir in modules:
+        backend_config = None
+        if module_dir.name == "00_backend":
+            write_backend_tfvars()
+        else:
+            backend_config = backend_config_for(module_dir)
+            if os.environ.get("GITHUB_ACTIONS") == "true" and backend_config is None:
+                raise RuntimeError(
+                    "BACKEND_RESOURCE_GROUP_NAME and BACKEND_STORAGE_ACCOUNT_NAME must be set in CI to use remote state."
+                )
         try:
             if module_dir.name == "15_machine_learning_workspace":
                 write_aml_workspace_tfvars()
@@ -790,7 +856,7 @@ def main():
             print(f"Skipping {module_dir.name}: {exc}")
             continue
 
-        terraform_destroy(module_dir)
+        terraform_destroy(module_dir, backend_config)
         cleanup_outputs(module_dir)
 
 

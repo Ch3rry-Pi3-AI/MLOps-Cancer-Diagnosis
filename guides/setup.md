@@ -43,6 +43,12 @@ az role assignment create --assignee <clientId> --role "User Access Administrato
 ```
 Note: this command does **not** change `AZURE_CREDENTIALS`. You do not need to update the GitHub secret after granting this role.
 
+4) Remote state (required for GitHub Actions deploy/destroy):
+   - Add secrets:
+     - `BACKEND_RESOURCE_GROUP_NAME` (e.g., `rg-mlops-cancer-tfstate`)
+     - `BACKEND_STORAGE_ACCOUNT_NAME` (must be globally unique, lower-case, 3-24 chars)
+     - Optional: `BACKEND_CONTAINER_NAME` (default `tfstate`)
+
 ## Terraform Setup
 Check if Terraform is installed and on PATH:
 
@@ -63,6 +69,7 @@ choco install terraform -y
 After installing, re-open PowerShell and re-run terraform version.
 
 ## Project Structure
+- `terraform/00_backend`: Remote Terraform state (storage account + container)
 - `terraform/01_resource_group`: Azure resource group
 - `terraform/02_networking`: VNet + subnets (foundation for private endpoints)
 - `terraform/03_storage_account`: ADLS Gen2 storage account + containers
@@ -90,6 +97,11 @@ The deploy script writes `terraform/01_resource_group/terraform.tfvars` automati
 If you want different defaults, edit `DEFAULTS` in `scripts/deploy.py` or set env vars in `.env`.
 
 Supported environment variables:
+- `BACKEND_RESOURCE_GROUP_NAME`
+- `BACKEND_RESOURCE_GROUP_NAME_PREFIX`
+- `BACKEND_STORAGE_ACCOUNT_NAME`
+- `BACKEND_STORAGE_ACCOUNT_NAME_PREFIX`
+- `BACKEND_CONTAINER_NAME`
 - `RESOURCE_GROUP_NAME`
 - `RESOURCE_GROUP_NAME_PREFIX`
 - `LOCATION`
@@ -245,4 +257,5 @@ python scripts\deploy.py --skip-adf-run
 ## Destroy
 ```powershell
 python scripts\destroy.py
+python scripts\destroy.py --destroy-backend
 ```
