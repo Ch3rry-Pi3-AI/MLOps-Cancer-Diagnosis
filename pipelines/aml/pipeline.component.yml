@@ -1,0 +1,47 @@
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineComponent.schema.json
+type: pipeline
+name: {{COMPONENT_NAME}}
+version: {{COMPONENT_VERSION}}
+display_name: breast_cancer_training_pipeline
+inputs:
+  training_data:
+    type: uri_folder
+outputs:
+  model_dir:
+    type: uri_folder
+jobs:
+  train:
+    type: command
+    code: ../../
+    command: >-
+      python src/training/train.py
+      --data_path ${{inputs.training_data}}
+      --model_output ${{outputs.model_dir}}
+    inputs:
+      training_data: ${{parent.inputs.training_data}}
+    outputs:
+      model_dir: ${{parent.outputs.model_dir}}
+    environment: azureml:{{ENV_NAME}}:{{ENV_VERSION}}
+    compute: azureml:{{COMPUTE_NAME}}
+  evaluate:
+    type: command
+    code: ../../
+    command: >-
+      python src/training/evaluate.py
+      --model_dir ${{inputs.model_dir}}
+      --data_path ${{inputs.training_data}}
+    inputs:
+      model_dir: ${{parent.jobs.train.outputs.model_dir}}
+      training_data: ${{parent.inputs.training_data}}
+    environment: azureml:{{ENV_NAME}}:{{ENV_VERSION}}
+    compute: azureml:{{COMPUTE_NAME}}
+  register:
+    type: command
+    code: ../../
+    command: >-
+      python src/training/register.py
+      --model_path ${{inputs.model_dir}}/model.joblib
+    inputs:
+      model_dir: ${{parent.jobs.train.outputs.model_dir}}
+    environment: azureml:{{ENV_NAME}}:{{ENV_VERSION}}
+    compute: azureml:{{COMPUTE_NAME}}

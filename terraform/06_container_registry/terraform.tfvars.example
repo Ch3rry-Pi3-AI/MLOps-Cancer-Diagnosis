@@ -3,5 +3,5 @@ location = "eastus2"
 acr_name = null
 acr_name_prefix = "acrmlopscancer"
 sku = "Basic"
-admin_enabled = false
+admin_enabled = true
 public_network_access_enabled = true

@@ -1,0 +1,12 @@
+data_factory_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mlops-cancer-kind-albacore/providers/Microsoft.DataFactory/factories/adf-mlops-cancer-quiet-otter"
+http_linked_service_name = null
+http_linked_service_name_prefix = "ls-http-mlops-cancer"
+http_base_url = "https://raw.githubusercontent.com"
+http_authentication_type = "Anonymous"
+http_enable_certificate_validation = true
+integration_runtime_name = null
+adls_linked_service_name = null
+adls_linked_service_name_prefix = "ls-adls-mlops-cancer"
+storage_dfs_endpoint = "https://stmlopscancerxyz.dfs.core.windows.net"
+storage_account_key = "<storage-key>"
+description = "Linked services for HTTP source and ADLS Gen2 sink"

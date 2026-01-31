@@ -47,8 +47,72 @@ DEFAULTS = {
     "ACR_NAME": None,
     "ACR_NAME_PREFIX": "acrmlopscancer",
     "ACR_SKU": "Basic",
-    "ACR_ADMIN_ENABLED": False,
+    "ACR_ADMIN_ENABLED": True,
     "ACR_PUBLIC_NETWORK_ACCESS_ENABLED": True,
+    "DATA_FACTORY_NAME": None,
+    "DATA_FACTORY_NAME_PREFIX": "adf-mlops-cancer",
+    "HTTP_LINKED_SERVICE_NAME": None,
+    "HTTP_LINKED_SERVICE_NAME_PREFIX": "ls-http-mlops-cancer",
+    "HTTP_BASE_URL": "https://raw.githubusercontent.com",
+    "HTTP_AUTHENTICATION_TYPE": "Anonymous",
+    "HTTP_ENABLE_CERTIFICATE_VALIDATION": True,
+    "INTEGRATION_RUNTIME_NAME": None,
+    "ADLS_LINKED_SERVICE_NAME": None,
+    "ADLS_LINKED_SERVICE_NAME_PREFIX": "ls-adls-mlops-cancer",
+    "LINKED_SERVICE_DESCRIPTION": "Linked services for HTTP source and ADLS Gen2 sink",
+    "ADF_PIPELINE_NAME": None,
+    "ADF_PIPELINE_NAME_PREFIX": "pl-mlops-cancer-http",
+    "HTTP_DATASET_NAME": None,
+    "HTTP_DATASET_NAME_PREFIX": "ds_http_mlopscancer",
+    "SINK_DATASET_NAME": None,
+    "SINK_DATASET_NAME_PREFIX": "ds_adls_bronze_mlopscancer",
+    "HTTP_RELATIVE_URL": "Ch3rry-Pi3-AI/MLOps-Cancer-Diagnosis/refs/heads/main/data/breast-cancer.data",
+    "SINK_FILE_SYSTEM": "bronze",
+    "SINK_FOLDER": "breast_cancer/raw",
+    "SINK_FILE": "breast_cancer.csv",
+    "ADF_DATAFLOW_NAME": None,
+    "ADF_DATAFLOW_NAME_PREFIX": "df-mlops-cancer-bronze-silver",
+    "BRONZE_SOURCE_DATASET_NAME": None,
+    "BRONZE_SOURCE_DATASET_NAME_PREFIX": "ds_bronze_mlopscancer",
+    "BRONZE_SOURCE_CONTAINER": "bronze",
+    "BRONZE_SOURCE_FOLDER": "breast_cancer/raw",
+    "BRONZE_SOURCE_FILE": "breast_cancer.csv",
+    "SILVER_SINK_CONTAINER": "silver",
+    "SILVER_SINK_FOLDER": "breast_cancer/clean",
+    "SILVER_SINK_FORMAT": "parquet",
+    "ADF_SILVER_PIPELINE_NAME": None,
+    "ADF_SILVER_PIPELINE_NAME_PREFIX": "pl-mlops-cancer-silver-dataflow",
+    "ADF_DATAFLOW_COMPUTE_TYPE": "General",
+    "ADF_DATAFLOW_CORE_COUNT": 8,
+    "ADF_DATAFLOW_TRACE_LEVEL": "None",
+    "ADF_GOLD_DATAFLOW_NAME": None,
+    "ADF_GOLD_DATAFLOW_NAME_PREFIX": "df-mlops-cancer-silver-gold",
+    "SILVER_SOURCE_DATASET_NAME": None,
+    "SILVER_SOURCE_DATASET_NAME_PREFIX": "ds_silver_mlopscancer",
+    "SILVER_SOURCE_CONTAINER": "silver",
+    "SILVER_SOURCE_FOLDER": "breast_cancer/clean",
+    "GOLD_SINK_CONTAINER": "gold",
+    "GOLD_SINK_FOLDER": "breast_cancer/features",
+    "GOLD_SINK_FORMAT": "parquet",
+    "ADF_GOLD_PIPELINE_NAME": None,
+    "ADF_GOLD_PIPELINE_NAME_PREFIX": "pl-mlops-cancer-gold-dataflow",
+    "ADF_MASTER_PIPELINE_NAME": None,
+    "ADF_MASTER_PIPELINE_NAME_PREFIX": "pl-mlops-cancer-master",
+    "AML_WORKSPACE_NAME": None,
+    "AML_WORKSPACE_NAME_PREFIX": "mlw-mlops-cancer",
+    "AML_PUBLIC_NETWORK_ACCESS_ENABLED": True,
+    "AML_STORAGE_ACCOUNT_NAME": None,
+    "AML_STORAGE_ACCOUNT_NAME_PREFIX": "stmlopscancerml",
+    "AML_STORAGE_ACCOUNT_REPLICATION_TYPE": "LRS",
+    "AML_STORAGE_ACCOUNT_TIER": "Standard",
+    "AML_STORAGE_PUBLIC_NETWORK_ACCESS_ENABLED": True,
+    "AML_COMPUTE_NAME": "cpu-cluster",
+    "AML_TRAIN_IMAGE_TAG": "0.1.0",
+    "AML_COMPUTE_VM_SIZE": "Standard_DS3_v2",
+    "AML_COMPUTE_VM_PRIORITY": "Dedicated",
+    "AML_COMPUTE_MIN_INSTANCES": 0,
+    "AML_COMPUTE_MAX_INSTANCES": 2,
+    "AML_COMPUTE_IDLE_TIME": "PT2M",
 }
 
 
@@ -130,6 +194,20 @@ def get_terraform_exe():
         if Path(candidate).exists():
             return candidate
     return exe
+
+
+def get_az_cmd():
+    az_cmd = shutil.which("az")
+    if az_cmd:
+        return az_cmd
+    candidates = [
+        r"C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin\az.cmd",
+        r"C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.cmd",
+    ]
+    for candidate in candidates:
+        if Path(candidate).exists():
+            return candidate
+    raise RuntimeError("Azure CLI not found. Install az CLI or add it to PATH.")
 
 
 def read_outputs_value(outputs_path, key):
@@ -271,6 +349,360 @@ def write_acr_tfvars():
     )
 
 
+def write_data_factory_tfvars():
+    adf_dir = TERRAFORM_DIR / "07_data_factory"
+    rg_outputs = TERRAFORM_DIR / "01_resource_group" / "outputs.json"
+    rg_name = read_outputs_value(rg_outputs, "resource_group_name")
+    rg_location = read_outputs_value(rg_outputs, "resource_group_location")
+    resolved_rg_name = env_or_default("RESOURCE_GROUP_NAME", rg_name)
+    if not resolved_rg_name:
+        raise RuntimeError("RESOURCE_GROUP_NAME not found. Deploy the resource group first or set RESOURCE_GROUP_NAME.")
+    write_tfvars(
+        adf_dir / "terraform.tfvars",
+        [
+            ("resource_group_name", resolved_rg_name),
+            ("location", env_or_default("LOCATION", rg_location)),
+            ("data_factory_name", env_or_default("DATA_FACTORY_NAME", DEFAULTS["DATA_FACTORY_NAME"])),
+            ("data_factory_name_prefix", env_or_default("DATA_FACTORY_NAME_PREFIX", DEFAULTS["DATA_FACTORY_NAME_PREFIX"])),
+        ],
+    )
+
+
+def write_adf_linked_services_tfvars():
+    ls_dir = TERRAFORM_DIR / "08_adf_linked_services"
+    adf_outputs = TERRAFORM_DIR / "07_data_factory" / "outputs.json"
+    storage_outputs = TERRAFORM_DIR / "03_storage_account" / "outputs.json"
+    data_factory_id = read_outputs_value(adf_outputs, "data_factory_id")
+    storage_dfs_endpoint = read_outputs_value(storage_outputs, "primary_dfs_endpoint")
+    storage_key = read_outputs_value(storage_outputs, "storage_account_primary_access_key")
+    if not data_factory_id:
+        raise RuntimeError("data_factory_id not found. Deploy the data factory first.")
+    if not storage_dfs_endpoint or not storage_key:
+        raise RuntimeError("Storage outputs not found. Deploy the storage account first.")
+    write_tfvars(
+        ls_dir / "terraform.tfvars",
+        [
+            ("data_factory_id", data_factory_id),
+            ("http_linked_service_name", env_or_default("HTTP_LINKED_SERVICE_NAME", DEFAULTS["HTTP_LINKED_SERVICE_NAME"])),
+            ("http_linked_service_name_prefix", env_or_default("HTTP_LINKED_SERVICE_NAME_PREFIX", DEFAULTS["HTTP_LINKED_SERVICE_NAME_PREFIX"])),
+            ("http_base_url", env_or_default("HTTP_BASE_URL", DEFAULTS["HTTP_BASE_URL"])),
+            ("http_authentication_type", env_or_default("HTTP_AUTHENTICATION_TYPE", DEFAULTS["HTTP_AUTHENTICATION_TYPE"])),
+            ("http_enable_certificate_validation", env_or_default("HTTP_ENABLE_CERTIFICATE_VALIDATION", DEFAULTS["HTTP_ENABLE_CERTIFICATE_VALIDATION"])),
+            ("integration_runtime_name", env_or_default("INTEGRATION_RUNTIME_NAME", DEFAULTS["INTEGRATION_RUNTIME_NAME"])),
+            ("adls_linked_service_name", env_or_default("ADLS_LINKED_SERVICE_NAME", DEFAULTS["ADLS_LINKED_SERVICE_NAME"])),
+            ("adls_linked_service_name_prefix", env_or_default("ADLS_LINKED_SERVICE_NAME_PREFIX", DEFAULTS["ADLS_LINKED_SERVICE_NAME_PREFIX"])),
+            ("storage_dfs_endpoint", storage_dfs_endpoint),
+            ("storage_account_key", storage_key),
+            ("description", env_or_default("LINKED_SERVICE_DESCRIPTION", DEFAULTS["LINKED_SERVICE_DESCRIPTION"])),
+        ],
+    )
+
+
+def write_adf_pipeline_http_tfvars():
+    pipeline_dir = TERRAFORM_DIR / "09_adf_pipeline_http"
+    adf_outputs = TERRAFORM_DIR / "07_data_factory" / "outputs.json"
+    ls_outputs = TERRAFORM_DIR / "08_adf_linked_services" / "outputs.json"
+    data_factory_id = read_outputs_value(adf_outputs, "data_factory_id")
+    http_linked_service_name = read_outputs_value(ls_outputs, "http_linked_service_name")
+    adls_linked_service_name = read_outputs_value(ls_outputs, "adls_linked_service_name")
+    if not data_factory_id:
+        raise RuntimeError("data_factory_id not found. Deploy the data factory first.")
+    if not http_linked_service_name or not adls_linked_service_name:
+        raise RuntimeError("Linked service outputs not found. Deploy linked services first.")
+    write_tfvars(
+        pipeline_dir / "terraform.tfvars",
+        [
+            ("data_factory_id", data_factory_id),
+            ("http_linked_service_name", http_linked_service_name),
+            ("adls_linked_service_name", adls_linked_service_name),
+            ("pipeline_name", env_or_default("ADF_PIPELINE_NAME", DEFAULTS["ADF_PIPELINE_NAME"])),
+            ("pipeline_name_prefix", env_or_default("ADF_PIPELINE_NAME_PREFIX", DEFAULTS["ADF_PIPELINE_NAME_PREFIX"])),
+            ("http_dataset_name", env_or_default("HTTP_DATASET_NAME", DEFAULTS["HTTP_DATASET_NAME"])),
+            ("http_dataset_name_prefix", env_or_default("HTTP_DATASET_NAME_PREFIX", DEFAULTS["HTTP_DATASET_NAME_PREFIX"])),
+            ("sink_dataset_name", env_or_default("SINK_DATASET_NAME", DEFAULTS["SINK_DATASET_NAME"])),
+            ("sink_dataset_name_prefix", env_or_default("SINK_DATASET_NAME_PREFIX", DEFAULTS["SINK_DATASET_NAME_PREFIX"])),
+            ("http_relative_url", env_or_default("HTTP_RELATIVE_URL", DEFAULTS["HTTP_RELATIVE_URL"])),
+            ("sink_file_system", env_or_default("SINK_FILE_SYSTEM", DEFAULTS["SINK_FILE_SYSTEM"])),
+            ("sink_folder", env_or_default("SINK_FOLDER", DEFAULTS["SINK_FOLDER"])),
+            ("sink_file", env_or_default("SINK_FILE", DEFAULTS["SINK_FILE"])),
+        ],
+    )
+
+
+def write_adf_dataflow_tfvars():
+    dataflow_dir = TERRAFORM_DIR / "10_adf_dataflow_bronze_silver"
+    adf_outputs = TERRAFORM_DIR / "07_data_factory" / "outputs.json"
+    ls_outputs = TERRAFORM_DIR / "08_adf_linked_services" / "outputs.json"
+    data_factory_id = read_outputs_value(adf_outputs, "data_factory_id")
+    adls_linked_service_name = read_outputs_value(ls_outputs, "adls_linked_service_name")
+    if not data_factory_id:
+        raise RuntimeError("data_factory_id not found. Deploy the data factory first.")
+    if not adls_linked_service_name:
+        raise RuntimeError("ADLS linked service not found. Deploy linked services first.")
+    write_tfvars(
+        dataflow_dir / "terraform.tfvars",
+        [
+            ("data_factory_id", data_factory_id),
+            ("adls_linked_service_name", adls_linked_service_name),
+            ("dataflow_name", env_or_default("ADF_DATAFLOW_NAME", DEFAULTS["ADF_DATAFLOW_NAME"])),
+            ("dataflow_name_prefix", env_or_default("ADF_DATAFLOW_NAME_PREFIX", DEFAULTS["ADF_DATAFLOW_NAME_PREFIX"])),
+            ("bronze_source_dataset_name", env_or_default("BRONZE_SOURCE_DATASET_NAME", DEFAULTS["BRONZE_SOURCE_DATASET_NAME"])),
+            ("bronze_source_dataset_name_prefix", env_or_default("BRONZE_SOURCE_DATASET_NAME_PREFIX", DEFAULTS["BRONZE_SOURCE_DATASET_NAME_PREFIX"])),
+            ("source_container", env_or_default("BRONZE_SOURCE_CONTAINER", DEFAULTS["BRONZE_SOURCE_CONTAINER"])),
+            ("source_folder", env_or_default("BRONZE_SOURCE_FOLDER", DEFAULTS["BRONZE_SOURCE_FOLDER"])),
+            ("source_file", env_or_default("BRONZE_SOURCE_FILE", DEFAULTS["BRONZE_SOURCE_FILE"])),
+            ("sink_container", env_or_default("SILVER_SINK_CONTAINER", DEFAULTS["SILVER_SINK_CONTAINER"])),
+            ("sink_folder", env_or_default("SILVER_SINK_FOLDER", DEFAULTS["SILVER_SINK_FOLDER"])),
+            ("sink_format", env_or_default("SILVER_SINK_FORMAT", DEFAULTS["SILVER_SINK_FORMAT"])),
+        ],
+    )
+
+
+def write_adf_pipeline_silver_tfvars():
+    pipeline_dir = TERRAFORM_DIR / "11_adf_pipeline_silver_dataflow"
+    adf_outputs = TERRAFORM_DIR / "07_data_factory" / "outputs.json"
+    dataflow_outputs = TERRAFORM_DIR / "10_adf_dataflow_bronze_silver" / "outputs.json"
+    data_factory_id = read_outputs_value(adf_outputs, "data_factory_id")
+    dataflow_name = read_outputs_value(dataflow_outputs, "dataflow_name")
+    if not data_factory_id:
+        raise RuntimeError("data_factory_id not found. Deploy the data factory first.")
+    if not dataflow_name:
+        raise RuntimeError("dataflow_name not found. Deploy the data flow first.")
+    write_tfvars(
+        pipeline_dir / "terraform.tfvars",
+        [
+            ("data_factory_id", data_factory_id),
+            ("dataflow_name", dataflow_name),
+            ("pipeline_name", env_or_default("ADF_SILVER_PIPELINE_NAME", DEFAULTS["ADF_SILVER_PIPELINE_NAME"])),
+            ("pipeline_name_prefix", env_or_default("ADF_SILVER_PIPELINE_NAME_PREFIX", DEFAULTS["ADF_SILVER_PIPELINE_NAME_PREFIX"])),
+            ("compute_type", env_or_default("ADF_DATAFLOW_COMPUTE_TYPE", DEFAULTS["ADF_DATAFLOW_COMPUTE_TYPE"])),
+            ("core_count", env_or_default("ADF_DATAFLOW_CORE_COUNT", DEFAULTS["ADF_DATAFLOW_CORE_COUNT"])),
+            ("trace_level", env_or_default("ADF_DATAFLOW_TRACE_LEVEL", DEFAULTS["ADF_DATAFLOW_TRACE_LEVEL"])),
+        ],
+    )
+
+
+def write_adf_dataflow_gold_tfvars():
+    dataflow_dir = TERRAFORM_DIR / "12_adf_dataflow_silver_gold"
+    adf_outputs = TERRAFORM_DIR / "07_data_factory" / "outputs.json"
+    ls_outputs = TERRAFORM_DIR / "08_adf_linked_services" / "outputs.json"
+    data_factory_id = read_outputs_value(adf_outputs, "data_factory_id")
+    adls_linked_service_name = read_outputs_value(ls_outputs, "adls_linked_service_name")
+    if not data_factory_id:
+        raise RuntimeError("data_factory_id not found. Deploy the data factory first.")
+    if not adls_linked_service_name:
+        raise RuntimeError("ADLS linked service not found. Deploy linked services first.")
+    write_tfvars(
+        dataflow_dir / "terraform.tfvars",
+        [
+            ("data_factory_id", data_factory_id),
+            ("adls_linked_service_name", adls_linked_service_name),
+            ("dataflow_name", env_or_default("ADF_GOLD_DATAFLOW_NAME", DEFAULTS["ADF_GOLD_DATAFLOW_NAME"])),
+            ("dataflow_name_prefix", env_or_default("ADF_GOLD_DATAFLOW_NAME_PREFIX", DEFAULTS["ADF_GOLD_DATAFLOW_NAME_PREFIX"])),
+            ("silver_source_dataset_name", env_or_default("SILVER_SOURCE_DATASET_NAME", DEFAULTS["SILVER_SOURCE_DATASET_NAME"])),
+            ("silver_source_dataset_name_prefix", env_or_default("SILVER_SOURCE_DATASET_NAME_PREFIX", DEFAULTS["SILVER_SOURCE_DATASET_NAME_PREFIX"])),
+            ("source_container", env_or_default("SILVER_SOURCE_CONTAINER", DEFAULTS["SILVER_SOURCE_CONTAINER"])),
+            ("source_folder", env_or_default("SILVER_SOURCE_FOLDER", DEFAULTS["SILVER_SOURCE_FOLDER"])),
+            ("sink_container", env_or_default("GOLD_SINK_CONTAINER", DEFAULTS["GOLD_SINK_CONTAINER"])),
+            ("sink_folder", env_or_default("GOLD_SINK_FOLDER", DEFAULTS["GOLD_SINK_FOLDER"])),
+            ("sink_format", env_or_default("GOLD_SINK_FORMAT", DEFAULTS["GOLD_SINK_FORMAT"])),
+        ],
+    )
+
+
+def write_adf_pipeline_gold_tfvars():
+    pipeline_dir = TERRAFORM_DIR / "13_adf_pipeline_gold_dataflow"
+    adf_outputs = TERRAFORM_DIR / "07_data_factory" / "outputs.json"
+    dataflow_outputs = TERRAFORM_DIR / "12_adf_dataflow_silver_gold" / "outputs.json"
+    data_factory_id = read_outputs_value(adf_outputs, "data_factory_id")
+    dataflow_name = read_outputs_value(dataflow_outputs, "dataflow_name")
+    if not data_factory_id:
+        raise RuntimeError("data_factory_id not found. Deploy the data factory first.")
+    if not dataflow_name:
+        raise RuntimeError("dataflow_name not found. Deploy the data flow first.")
+    write_tfvars(
+        pipeline_dir / "terraform.tfvars",
+        [
+            ("data_factory_id", data_factory_id),
+            ("dataflow_name", dataflow_name),
+            ("pipeline_name", env_or_default("ADF_GOLD_PIPELINE_NAME", DEFAULTS["ADF_GOLD_PIPELINE_NAME"])),
+            ("pipeline_name_prefix", env_or_default("ADF_GOLD_PIPELINE_NAME_PREFIX", DEFAULTS["ADF_GOLD_PIPELINE_NAME_PREFIX"])),
+            ("compute_type", env_or_default("ADF_DATAFLOW_COMPUTE_TYPE", DEFAULTS["ADF_DATAFLOW_COMPUTE_TYPE"])),
+            ("core_count", env_or_default("ADF_DATAFLOW_CORE_COUNT", DEFAULTS["ADF_DATAFLOW_CORE_COUNT"])),
+            ("trace_level", env_or_default("ADF_DATAFLOW_TRACE_LEVEL", DEFAULTS["ADF_DATAFLOW_TRACE_LEVEL"])),
+        ],
+    )
+
+
+def write_adf_pipeline_master_tfvars():
+    pipeline_dir = TERRAFORM_DIR / "14_adf_pipeline_master"
+    adf_outputs = TERRAFORM_DIR / "07_data_factory" / "outputs.json"
+    ingest_outputs = TERRAFORM_DIR / "09_adf_pipeline_http" / "outputs.json"
+    silver_outputs = TERRAFORM_DIR / "11_adf_pipeline_silver_dataflow" / "outputs.json"
+    gold_outputs = TERRAFORM_DIR / "13_adf_pipeline_gold_dataflow" / "outputs.json"
+    data_factory_id = read_outputs_value(adf_outputs, "data_factory_id")
+    ingest_name = read_outputs_value(ingest_outputs, "pipeline_name")
+    silver_name = read_outputs_value(silver_outputs, "pipeline_name")
+    gold_name = read_outputs_value(gold_outputs, "pipeline_name")
+    if not data_factory_id:
+        raise RuntimeError("data_factory_id not found. Deploy the data factory first.")
+    if not ingest_name or not silver_name or not gold_name:
+        raise RuntimeError("Pipeline outputs not found. Deploy ingest/silver/gold pipelines first.")
+    write_tfvars(
+        pipeline_dir / "terraform.tfvars",
+        [
+            ("data_factory_id", data_factory_id),
+            ("pipeline_name", env_or_default("ADF_MASTER_PIPELINE_NAME", DEFAULTS["ADF_MASTER_PIPELINE_NAME"])),
+            ("pipeline_name_prefix", env_or_default("ADF_MASTER_PIPELINE_NAME_PREFIX", DEFAULTS["ADF_MASTER_PIPELINE_NAME_PREFIX"])),
+            ("ingest_pipeline_name", ingest_name),
+            ("silver_pipeline_name", silver_name),
+            ("gold_pipeline_name", gold_name),
+        ],
+    )
+
+
+def write_aml_workspace_tfvars():
+    aml_dir = TERRAFORM_DIR / "15_machine_learning_workspace"
+    rg_outputs = TERRAFORM_DIR / "01_resource_group" / "outputs.json"
+    aml_storage_outputs = TERRAFORM_DIR / "16_aml_storage_account" / "outputs.json"
+    kv_outputs = TERRAFORM_DIR / "04_key_vault" / "outputs.json"
+    obs_outputs = TERRAFORM_DIR / "05_log_analytics_app_insights" / "outputs.json"
+    acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
+    rg_name = read_outputs_value(rg_outputs, "resource_group_name")
+    rg_location = read_outputs_value(rg_outputs, "resource_group_location")
+    storage_id = read_outputs_value(aml_storage_outputs, "storage_account_id")
+    kv_id = read_outputs_value(kv_outputs, "key_vault_id")
+    appi_id = read_outputs_value(obs_outputs, "app_insights_id")
+    acr_id = read_outputs_value(acr_outputs, "acr_id")
+    resolved_rg_name = env_or_default("RESOURCE_GROUP_NAME", rg_name)
+    if not resolved_rg_name:
+        raise RuntimeError("RESOURCE_GROUP_NAME not found. Deploy the resource group first or set RESOURCE_GROUP_NAME.")
+    if not storage_id or not kv_id or not appi_id or not acr_id:
+        raise RuntimeError("Missing dependency outputs. Deploy AML storage, key vault, app insights, and ACR first.")
+    write_tfvars(
+        aml_dir / "terraform.tfvars",
+        [
+            ("resource_group_name", resolved_rg_name),
+            ("location", env_or_default("LOCATION", rg_location)),
+            ("workspace_name", env_or_default("AML_WORKSPACE_NAME", DEFAULTS["AML_WORKSPACE_NAME"])),
+            ("workspace_name_prefix", env_or_default("AML_WORKSPACE_NAME_PREFIX", DEFAULTS["AML_WORKSPACE_NAME_PREFIX"])),
+            ("storage_account_id", storage_id),
+            ("key_vault_id", kv_id),
+            ("application_insights_id", appi_id),
+            ("container_registry_id", acr_id),
+            ("public_network_access_enabled", env_or_default("AML_PUBLIC_NETWORK_ACCESS_ENABLED", DEFAULTS["AML_PUBLIC_NETWORK_ACCESS_ENABLED"])),
+        ],
+    )
+
+
+def write_aml_storage_tfvars():
+    storage_dir = TERRAFORM_DIR / "16_aml_storage_account"
+    rg_outputs = TERRAFORM_DIR / "01_resource_group" / "outputs.json"
+    rg_name = read_outputs_value(rg_outputs, "resource_group_name")
+    rg_location = read_outputs_value(rg_outputs, "resource_group_location")
+    resolved_rg_name = env_or_default("RESOURCE_GROUP_NAME", rg_name)
+    if not resolved_rg_name:
+        raise RuntimeError("RESOURCE_GROUP_NAME not found. Deploy the resource group first or set RESOURCE_GROUP_NAME.")
+    write_tfvars(
+        storage_dir / "terraform.tfvars",
+        [
+            ("resource_group_name", resolved_rg_name),
+            ("location", env_or_default("LOCATION", rg_location)),
+            ("storage_account_name", env_or_default("AML_STORAGE_ACCOUNT_NAME", DEFAULTS["AML_STORAGE_ACCOUNT_NAME"])),
+            ("storage_account_name_prefix", env_or_default("AML_STORAGE_ACCOUNT_NAME_PREFIX", DEFAULTS["AML_STORAGE_ACCOUNT_NAME_PREFIX"])),
+            ("account_replication_type", env_or_default("AML_STORAGE_ACCOUNT_REPLICATION_TYPE", DEFAULTS["AML_STORAGE_ACCOUNT_REPLICATION_TYPE"])),
+            ("account_tier", env_or_default("AML_STORAGE_ACCOUNT_TIER", DEFAULTS["AML_STORAGE_ACCOUNT_TIER"])),
+            ("public_network_access_enabled", env_or_default("AML_STORAGE_PUBLIC_NETWORK_ACCESS_ENABLED", DEFAULTS["AML_STORAGE_PUBLIC_NETWORK_ACCESS_ENABLED"])),
+        ],
+    )
+
+
+def update_aml_train_job_yaml():
+    job_path = ROOT / "pipelines" / "aml" / "jobs" / "train.yml"
+    if not job_path.exists():
+        raise RuntimeError(f"AML job YAML not found at {job_path}")
+
+    acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
+    login_server = read_outputs_value(acr_outputs, "acr_login_server")
+    if not login_server:
+        raise RuntimeError("acr_login_server not found. Deploy ACR first.")
+
+    compute_name = env_or_default("AML_COMPUTE_NAME", DEFAULTS["AML_COMPUTE_NAME"])
+    image_tag = env_or_default("AML_TRAIN_IMAGE_TAG", DEFAULTS["AML_TRAIN_IMAGE_TAG"])
+    image_value = f"{login_server}/mlops-cancer-train:{image_tag}"
+
+    lines = job_path.read_text(encoding="utf-8").splitlines()
+    updated = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith("image:"):
+            indent = line[: len(line) - len(stripped)]
+            updated.append(f"{indent}image: {image_value}")
+            continue
+        if stripped.startswith("compute:"):
+            indent = line[: len(line) - len(stripped)]
+            updated.append(f"{indent}compute: azureml:{compute_name}")
+            continue
+        updated.append(line)
+    job_path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+
+
+def write_aml_compute_tfvars():
+    compute_dir = TERRAFORM_DIR / "17_aml_compute"
+    aml_outputs = TERRAFORM_DIR / "15_machine_learning_workspace" / "outputs.json"
+    workspace_id = read_outputs_value(aml_outputs, "aml_workspace_id")
+    workspace_location = read_outputs_value(aml_outputs, "aml_workspace_location")
+    if not workspace_id or not workspace_location:
+        raise RuntimeError("AML workspace outputs not found. Deploy the AML workspace first.")
+    write_tfvars(
+        compute_dir / "terraform.tfvars",
+        [
+            ("workspace_id", workspace_id),
+            ("location", workspace_location),
+            ("compute_name", env_or_default("AML_COMPUTE_NAME", DEFAULTS["AML_COMPUTE_NAME"])),
+            ("vm_size", env_or_default("AML_COMPUTE_VM_SIZE", DEFAULTS["AML_COMPUTE_VM_SIZE"])),
+            ("vm_priority", env_or_default("AML_COMPUTE_VM_PRIORITY", DEFAULTS["AML_COMPUTE_VM_PRIORITY"])),
+            ("min_instances", env_or_default("AML_COMPUTE_MIN_INSTANCES", DEFAULTS["AML_COMPUTE_MIN_INSTANCES"])),
+            ("max_instances", env_or_default("AML_COMPUTE_MAX_INSTANCES", DEFAULTS["AML_COMPUTE_MAX_INSTANCES"])),
+            ("idle_time_before_scaledown", env_or_default("AML_COMPUTE_IDLE_TIME", DEFAULTS["AML_COMPUTE_IDLE_TIME"])),
+        ],
+    )
+
+
+def write_acr_rbac_tfvars():
+    rbac_dir = TERRAFORM_DIR / "18_acr_rbac"
+    acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
+    compute_outputs = TERRAFORM_DIR / "17_aml_compute" / "outputs.json"
+    acr_id = read_outputs_value(acr_outputs, "acr_id")
+    compute_principal_id = read_outputs_value(compute_outputs, "compute_principal_id")
+    if not acr_id or not compute_principal_id:
+        raise RuntimeError("Missing outputs for ACR or AML compute. Deploy those first.")
+    write_tfvars(
+        rbac_dir / "terraform.tfvars",
+        [
+            ("acr_id", acr_id),
+            ("compute_principal_id", compute_principal_id),
+        ],
+    )
+
+
+def write_storage_rbac_tfvars():
+    rbac_dir = TERRAFORM_DIR / "19_storage_rbac"
+    storage_outputs = TERRAFORM_DIR / "03_storage_account" / "outputs.json"
+    compute_outputs = TERRAFORM_DIR / "17_aml_compute" / "outputs.json"
+    storage_account_id = read_outputs_value(storage_outputs, "storage_account_id")
+    compute_principal_id = read_outputs_value(compute_outputs, "compute_principal_id")
+    if not storage_account_id or not compute_principal_id:
+        raise RuntimeError("Missing outputs for storage or AML compute. Deploy those first.")
+    write_tfvars(
+        rbac_dir / "terraform.tfvars",
+        [
+            ("storage_account_id", storage_account_id),
+            ("compute_principal_id", compute_principal_id),
+        ],
+    )
+
+
 def terraform_apply(module_dir):
     terraform_exe = get_terraform_exe()
     run([terraform_exe, "init", "-upgrade"], cwd=module_dir)
@@ -283,6 +715,24 @@ def write_outputs(module_dir):
     (module_dir / "outputs.json").write_text(output + "\n", encoding="utf-8")
 
 
+def sync_aml_workspace_keys():
+    rg_outputs = TERRAFORM_DIR / "01_resource_group" / "outputs.json"
+    aml_outputs = TERRAFORM_DIR / "15_machine_learning_workspace" / "outputs.json"
+    resource_group = read_outputs_value(rg_outputs, "resource_group_name")
+    resource_group_id = read_outputs_value(rg_outputs, "resource_group_id")
+    workspace_name = read_outputs_value(aml_outputs, "aml_workspace_name")
+    if not resource_group or not resource_group_id or not workspace_name:
+        raise RuntimeError("Missing outputs for AML workspace sync. Deploy RG and AML workspace first.")
+    az_cmd = get_az_cmd()
+    subscription_id = resource_group_id.split("/subscriptions/", 1)[1].split("/", 1)[0]
+    url = (
+        f"https://management.azure.com/subscriptions/{subscription_id}"
+        f"/resourceGroups/{resource_group}/providers/Microsoft.MachineLearningServices"
+        f"/workspaces/{workspace_name}/resyncKeys?api-version=2024-04-01"
+    )
+    run([az_cmd, "rest", "--method", "post", "--url", url])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Deploy Terraform resources for the MLOps project.")
     parser.add_argument("--rg-only", action="store_true", help="Deploy only the resource group")
@@ -291,6 +741,23 @@ def main():
     parser.add_argument("--keyvault-only", action="store_true", help="Deploy only the key vault")
     parser.add_argument("--observability-only", action="store_true", help="Deploy only Log Analytics + App Insights")
     parser.add_argument("--acr-only", action="store_true", help="Deploy only the container registry")
+    parser.add_argument("--datafactory-only", action="store_true", help="Deploy only the data factory")
+    parser.add_argument("--adf-links-only", action="store_true", help="Deploy only the ADF linked services")
+    parser.add_argument("--adf-pipeline-only", action="store_true", help="Deploy only the ADF HTTP pipeline")
+    parser.add_argument("--adf-dataflow-only", action="store_true", help="Deploy only the ADF bronze->silver data flow")
+    parser.add_argument("--adf-silver-pipeline-only", action="store_true", help="Deploy only the ADF silver pipeline")
+    parser.add_argument("--adf-gold-dataflow-only", action="store_true", help="Deploy only the ADF silver->gold data flow")
+    parser.add_argument("--adf-gold-pipeline-only", action="store_true", help="Deploy only the ADF gold pipeline")
+    parser.add_argument("--adf-master-pipeline-only", action="store_true", help="Deploy only the ADF master pipeline")
+    parser.add_argument("--aml-only", action="store_true", help="Deploy only the Azure ML workspace")
+    parser.add_argument("--aml-storage-only", action="store_true", help="Deploy only AML storage account (non-HNS)")
+    parser.add_argument("--aml-job-config-only", action="store_true", help="Update AML job YAML from outputs")
+    parser.add_argument("--acr-build-train-image", action="store_true", help="Build/push training image in ACR (no local Docker)")
+    parser.add_argument("--docker-build-train-image", action="store_true", help="Build/push training image using local Docker")
+    parser.add_argument("--docker-build-infer-image", action="store_true", help="Build/push inference image using local Docker")
+    parser.add_argument("--aml-compute-only", action="store_true", help="Deploy only AML compute cluster")
+    parser.add_argument("--acr-rbac-only", action="store_true", help="Assign AcrPull to AML workspace identity")
+    parser.add_argument("--storage-rbac-only", action="store_true", help="Assign Storage Blob Data Contributor to AML compute identity")
     args = parser.parse_args()
 
     load_env_file(ROOT / ".env")
@@ -302,6 +769,19 @@ def main():
         TERRAFORM_DIR / "04_key_vault",
         TERRAFORM_DIR / "05_log_analytics_app_insights",
         TERRAFORM_DIR / "06_container_registry",
+        TERRAFORM_DIR / "16_aml_storage_account",
+        TERRAFORM_DIR / "15_machine_learning_workspace",
+        TERRAFORM_DIR / "17_aml_compute",
+        TERRAFORM_DIR / "18_acr_rbac",
+        TERRAFORM_DIR / "19_storage_rbac",
+        TERRAFORM_DIR / "07_data_factory",
+        TERRAFORM_DIR / "08_adf_linked_services",
+        TERRAFORM_DIR / "09_adf_pipeline_http",
+        TERRAFORM_DIR / "10_adf_dataflow_bronze_silver",
+        TERRAFORM_DIR / "11_adf_pipeline_silver_dataflow",
+        TERRAFORM_DIR / "12_adf_dataflow_silver_gold",
+        TERRAFORM_DIR / "13_adf_pipeline_gold_dataflow",
+        TERRAFORM_DIR / "14_adf_pipeline_master",
     ]
     if args.rg_only:
         modules = [TERRAFORM_DIR / "01_resource_group"]
@@ -315,6 +795,36 @@ def main():
         modules = [TERRAFORM_DIR / "05_log_analytics_app_insights"]
     if args.acr_only:
         modules = [TERRAFORM_DIR / "06_container_registry"]
+    if args.datafactory_only:
+        modules = [TERRAFORM_DIR / "07_data_factory"]
+    if args.adf_links_only:
+        modules = [TERRAFORM_DIR / "08_adf_linked_services"]
+    if args.adf_pipeline_only:
+        modules = [TERRAFORM_DIR / "09_adf_pipeline_http"]
+    if args.adf_dataflow_only:
+        modules = [TERRAFORM_DIR / "10_adf_dataflow_bronze_silver"]
+    if args.adf_silver_pipeline_only:
+        modules = [TERRAFORM_DIR / "11_adf_pipeline_silver_dataflow"]
+    if args.adf_gold_dataflow_only:
+        modules = [TERRAFORM_DIR / "12_adf_dataflow_silver_gold"]
+    if args.adf_gold_pipeline_only:
+        modules = [TERRAFORM_DIR / "13_adf_pipeline_gold_dataflow"]
+    if args.adf_master_pipeline_only:
+        modules = [TERRAFORM_DIR / "14_adf_pipeline_master"]
+    if args.aml_only:
+        modules = [TERRAFORM_DIR / "15_machine_learning_workspace"]
+    if args.aml_storage_only:
+        modules = [TERRAFORM_DIR / "16_aml_storage_account"]
+    if args.aml_job_config_only:
+        modules = []
+    if args.acr_build_train_image:
+        modules = []
+    if args.aml_compute_only:
+        modules = [TERRAFORM_DIR / "17_aml_compute"]
+    if args.acr_rbac_only:
+        modules = [TERRAFORM_DIR / "18_acr_rbac"]
+    if args.storage_rbac_only:
+        modules = [TERRAFORM_DIR / "19_storage_rbac"]
 
     for module_dir in modules:
         if module_dir.name == "01_resource_group":
@@ -329,8 +839,84 @@ def main():
             write_log_analytics_tfvars()
         if module_dir.name == "06_container_registry":
             write_acr_tfvars()
+        if module_dir.name == "07_data_factory":
+            write_data_factory_tfvars()
+        if module_dir.name == "08_adf_linked_services":
+            write_adf_linked_services_tfvars()
+        if module_dir.name == "09_adf_pipeline_http":
+            write_adf_pipeline_http_tfvars()
+        if module_dir.name == "10_adf_dataflow_bronze_silver":
+            write_adf_dataflow_tfvars()
+        if module_dir.name == "11_adf_pipeline_silver_dataflow":
+            write_adf_pipeline_silver_tfvars()
+        if module_dir.name == "12_adf_dataflow_silver_gold":
+            write_adf_dataflow_gold_tfvars()
+        if module_dir.name == "13_adf_pipeline_gold_dataflow":
+            write_adf_pipeline_gold_tfvars()
+        if module_dir.name == "14_adf_pipeline_master":
+            write_adf_pipeline_master_tfvars()
+        if module_dir.name == "15_machine_learning_workspace":
+            write_aml_workspace_tfvars()
+        if module_dir.name == "16_aml_storage_account":
+            write_aml_storage_tfvars()
+        if module_dir.name == "17_aml_compute":
+            write_aml_compute_tfvars()
+        if module_dir.name == "18_acr_rbac":
+            write_acr_rbac_tfvars()
+        if module_dir.name == "19_storage_rbac":
+            write_storage_rbac_tfvars()
         terraform_apply(module_dir)
         write_outputs(module_dir)
+
+    if args.aml_job_config_only or TERRAFORM_DIR.joinpath("06_container_registry") in modules:
+        update_aml_train_job_yaml()
+
+    if args.acr_build_train_image:
+        acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
+        acr_name = read_outputs_value(acr_outputs, "acr_name")
+        if not acr_name:
+            raise RuntimeError("acr_name not found. Deploy ACR first.")
+        image_tag = env_or_default("AML_TRAIN_IMAGE_TAG", DEFAULTS["AML_TRAIN_IMAGE_TAG"])
+        dockerfile = ROOT / "docker" / "train" / "Dockerfile"
+        az_cmd = get_az_cmd()
+        run([
+            az_cmd, "acr", "build",
+            "--registry", acr_name,
+            "--image", f"mlops-cancer-train:{image_tag}",
+            "-f", str(dockerfile),
+            ".",
+        ], cwd=ROOT)
+
+    if args.docker_build_train_image:
+        acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
+        login_server = read_outputs_value(acr_outputs, "acr_login_server")
+        acr_name = read_outputs_value(acr_outputs, "acr_name")
+        if not login_server or not acr_name:
+            raise RuntimeError("ACR outputs not found. Deploy ACR first.")
+        image_tag = env_or_default("AML_TRAIN_IMAGE_TAG", DEFAULTS["AML_TRAIN_IMAGE_TAG"])
+        dockerfile = ROOT / "docker" / "train" / "Dockerfile"
+        image = f"{login_server}/mlops-cancer-train:{image_tag}"
+        run(["docker", "build", "-t", image, "-f", str(dockerfile), "."], cwd=ROOT)
+        az_cmd = get_az_cmd()
+        run([az_cmd, "acr", "login", "--name", acr_name], cwd=ROOT)
+        run(["docker", "push", image], cwd=ROOT)
+
+    if args.docker_build_infer_image:
+        acr_outputs = TERRAFORM_DIR / "06_container_registry" / "outputs.json"
+        login_server = read_outputs_value(acr_outputs, "acr_login_server")
+        acr_name = read_outputs_value(acr_outputs, "acr_name")
+        if not login_server or not acr_name:
+            raise RuntimeError("ACR outputs not found. Deploy ACR first.")
+        image_tag = env_or_default("AML_TRAIN_IMAGE_TAG", DEFAULTS["AML_TRAIN_IMAGE_TAG"])
+        dockerfile = ROOT / "docker" / "inference" / "Dockerfile"
+        image = f"{login_server}/mlops-cancer-infer:{image_tag}"
+        run(["docker", "build", "-t", image, "-f", str(dockerfile), "."], cwd=ROOT)
+        az_cmd = get_az_cmd()
+        run([az_cmd, "acr", "login", "--name", acr_name], cwd=ROOT)
+        run(["docker", "push", image], cwd=ROOT)
+
+    if modules:
+        sync_aml_workspace_keys()
 
 
 if __name__ == "__main__":

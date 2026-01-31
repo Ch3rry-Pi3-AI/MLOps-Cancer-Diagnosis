@@ -1,0 +1,19 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+name: breast_cancer_train
+display_name: breast_cancer_train
+experiment_name: breast_cancer_experiment
+code: ../../../
+command: >-
+  python src/training/train.py
+  --data_path ${{inputs.training_data}}
+  --model_output ${{outputs.model_dir}}
+inputs:
+  training_data:
+    type: uri_folder
+    path: azureml://datastores/workspaceblobstore/paths/gold/breast_cancer/features/
+outputs:
+  model_dir:
+    type: uri_folder
+environment:
+  image: acrmlopscancerconcretemallard.azurecr.io/mlops-cancer-train:0.1.0
+compute: azureml:cpu-cluster

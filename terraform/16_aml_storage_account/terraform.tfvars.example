@@ -1,0 +1,7 @@
+resource_group_name = "rg-mlops-cancer-kind-albacore"
+location = "eastus2"
+storage_account_name = null
+storage_account_name_prefix = "stmlopscancerml"
+account_replication_type = "LRS"
+account_tier = "Standard"
+public_network_access_enabled = true

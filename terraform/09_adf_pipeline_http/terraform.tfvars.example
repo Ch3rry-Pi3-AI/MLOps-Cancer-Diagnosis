@@ -1,0 +1,13 @@
+data_factory_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mlops-cancer-kind-albacore/providers/Microsoft.DataFactory/factories/adf-mlops-cancer-quiet-otter"
+http_linked_service_name = "ls-http-mlops-cancer-cool-otter"
+adls_linked_service_name = "ls-adls-mlops-cancer-cool-otter"
+pipeline_name = null
+pipeline_name_prefix = "pl-mlops-cancer-http"
+http_dataset_name = null
+http_dataset_name_prefix = "ds_http_mlopscancer"
+sink_dataset_name = null
+sink_dataset_name_prefix = "ds_adls_bronze_mlopscancer"
+http_relative_url = "Ch3rry-Pi3-AI/MLOps-Cancer-Diagnosis/refs/heads/main/data/breast-cancer.data"
+sink_file_system = "bronze"
+sink_folder = "breast_cancer/raw"
+sink_file = "breast_cancer.csv"

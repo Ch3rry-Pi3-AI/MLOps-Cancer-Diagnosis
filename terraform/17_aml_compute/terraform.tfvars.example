@@ -1,0 +1,8 @@
+workspace_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mlops-cancer-kind-albacore/providers/Microsoft.MachineLearningServices/workspaces/mlw-mlops-cancer-quiet-otter"
+location = "eastus2"
+compute_name = "cpu-cluster"
+vm_size = "Standard_DS3_v2"
+vm_priority = "Dedicated"
+min_instances = 0
+max_instances = 2
+idle_time_before_scaledown = "PT2M"

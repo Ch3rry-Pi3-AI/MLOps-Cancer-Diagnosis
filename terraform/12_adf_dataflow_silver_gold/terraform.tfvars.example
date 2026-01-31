@@ -1,0 +1,11 @@
+data_factory_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mlops-cancer-kind-albacore/providers/Microsoft.DataFactory/factories/adf-mlops-cancer-quiet-otter"
+adls_linked_service_name = "ls-adls-mlops-cancer-cool-otter"
+dataflow_name = null
+dataflow_name_prefix = "df-mlops-cancer-silver-gold"
+silver_source_dataset_name = null
+silver_source_dataset_name_prefix = "ds_silver_mlopscancer"
+source_container = "silver"
+source_folder = "breast_cancer/clean"
+sink_container = "gold"
+sink_folder = "breast_cancer/features"
+sink_format = "parquet"

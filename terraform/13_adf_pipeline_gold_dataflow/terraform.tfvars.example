@@ -1,0 +1,7 @@
+data_factory_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-mlops-cancer-kind-albacore/providers/Microsoft.DataFactory/factories/adf-mlops-cancer-quiet-otter"
+dataflow_name = "df-mlops-cancer-silver-gold-cool-otter"
+pipeline_name = null
+pipeline_name_prefix = "pl-mlops-cancer-gold-dataflow"
+compute_type = "General"
+core_count = 8
+trace_level = "None"
