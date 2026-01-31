@@ -236,6 +236,11 @@ az ml job create --file pipelines/aml/jobs/train.yml --resource-group <rg> --wor
 ```powershell
 python scripts\deploy.py
 ```
+The deploy script automatically triggers the ADF master pipeline after provisioning ADF.
+If you want to skip this (e.g., for infra-only deploys), use:
+```powershell
+python scripts\deploy.py --skip-adf-run
+```
 
 ## Destroy
 ```powershell

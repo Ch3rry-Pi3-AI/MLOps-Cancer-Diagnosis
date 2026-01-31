@@ -760,6 +760,26 @@ def sync_aml_workspace_keys():
     run([az_cmd, "rest", "--method", "post", "--url", url])
 
 
+def run_adf_master_pipeline():
+    rg_outputs = TERRAFORM_DIR / "01_resource_group" / "outputs.json"
+    adf_outputs = TERRAFORM_DIR / "07_data_factory" / "outputs.json"
+    master_outputs = TERRAFORM_DIR / "14_adf_pipeline_master" / "outputs.json"
+    resource_group = read_outputs_value(rg_outputs, "resource_group_name")
+    data_factory_name = read_outputs_value(adf_outputs, "data_factory_name")
+    pipeline_name = read_outputs_value(master_outputs, "pipeline_name")
+    if not resource_group or not data_factory_name or not pipeline_name:
+        print("Skipping ADF master pipeline run (missing outputs).")
+        return False
+    az_cmd = get_az_cmd()
+    run([
+        az_cmd, "datafactory", "pipeline", "create-run",
+        "--resource-group", resource_group,
+        "--factory-name", data_factory_name,
+        "--name", pipeline_name,
+    ])
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="Deploy Terraform resources for the MLOps project.")
     parser.add_argument("--rg-only", action="store_true", help="Deploy only the resource group")
@@ -785,6 +805,7 @@ def main():
     parser.add_argument("--aml-compute-only", action="store_true", help="Deploy only AML compute cluster")
     parser.add_argument("--acr-rbac-only", action="store_true", help="Assign AcrPull to AML workspace identity")
     parser.add_argument("--storage-rbac-only", action="store_true", help="Assign Storage Blob Data Contributor to AML compute identity")
+    parser.add_argument("--skip-adf-run", action="store_true", help="Skip triggering the ADF master pipeline after deploy")
     args = parser.parse_args()
 
     load_env_file(ROOT / ".env")
@@ -968,6 +989,20 @@ def main():
 
     if modules:
         sync_aml_workspace_keys()
+
+    adf_module_names = {
+        "07_data_factory",
+        "08_adf_linked_services",
+        "09_adf_pipeline_http",
+        "10_adf_dataflow_bronze_silver",
+        "11_adf_pipeline_silver_dataflow",
+        "12_adf_dataflow_silver_gold",
+        "13_adf_pipeline_gold_dataflow",
+        "14_adf_pipeline_master",
+    }
+    if modules and not args.skip_adf_run:
+        if any(module_dir.name in adf_module_names for module_dir in modules):
+            run_adf_master_pipeline()
 
 
 if __name__ == "__main__":

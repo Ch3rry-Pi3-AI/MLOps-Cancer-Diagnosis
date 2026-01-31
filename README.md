@@ -51,6 +51,7 @@ az account show
 ```powershell
 uv run .\scripts\deploy.py
 ```
+The deploy script now **automatically triggers the ADF master pipeline** (HTTP -> bronze -> silver -> gold) after provisioning ADF. Use `--skip-adf-run` to opt out.
 
 ## GitHub Actions (CI/CD)
 Set the service principal secret so workflows can authenticate to Azure:
@@ -143,6 +144,7 @@ python scripts\deploy.py --docker-build-infer-image
 python scripts\deploy.py --aml-compute-only
 python scripts\deploy.py --acr-rbac-only
 python scripts\deploy.py --storage-rbac-only
+python scripts\deploy.py --skip-adf-run
 ```
 
 Destroy:
