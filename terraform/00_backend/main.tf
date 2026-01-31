@@ -26,7 +26,7 @@ resource "random_string" "storage_suffix" {
   length  = 6
   upper   = false
   lower   = true
-  number  = true
+  numeric = true
   special = false
 }
 
@@ -46,7 +46,6 @@ resource "azurerm_storage_account" "backend" {
   location                 = azurerm_resource_group.backend.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-  allow_blob_public_access = false
   min_tls_version          = "TLS1_2"
 }
 
