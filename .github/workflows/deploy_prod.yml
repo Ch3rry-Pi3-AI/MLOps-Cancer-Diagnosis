@@ -60,29 +60,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          def get(path, key):
-              data = json.loads(Path(path).read_text(encoding="utf-8"))
-              return data[key]["value"]
-
-          rg = get("terraform/01_resource_group/outputs.json", "resource_group_name")
-          adf = get("terraform/07_data_factory/outputs.json", "data_factory_name")
-          pipe = get("terraform/14_adf_pipeline_master/outputs.json", "pipeline_name")
-          storage = get("terraform/03_storage_account/outputs.json", "storage_account_name")
-          key = get("terraform/03_storage_account/outputs.json", "storage_account_primary_access_key")
-
-          env_path = Path(os.environ["GITHUB_ENV"])
-          with env_path.open("a", encoding="utf-8") as f:
-              f.write(f"RG_NAME={rg}\n")
-              f.write(f"ADF_NAME={adf}\n")
-              f.write(f"ADF_PIPELINE={pipe}\n")
-              f.write(f"STORAGE_NAME={storage}\n")
-              f.write(f"STORAGE_KEY={key}\n")
-          PY
+          RG_NAME=$(jq -r '.resource_group_name.value' terraform/01_resource_group/outputs.json)
+          ADF_NAME=$(jq -r '.data_factory_name.value' terraform/07_data_factory/outputs.json)
+          ADF_PIPELINE=$(jq -r '.pipeline_name.value' terraform/14_adf_pipeline_master/outputs.json)
+          STORAGE_NAME=$(jq -r '.storage_account_name.value' terraform/03_storage_account/outputs.json)
+          STORAGE_KEY=$(jq -r '.storage_account_primary_access_key.value' terraform/03_storage_account/outputs.json)
 
           run_id=$(az datafactory pipeline create-run \
             --resource-group "$RG_NAME" \
