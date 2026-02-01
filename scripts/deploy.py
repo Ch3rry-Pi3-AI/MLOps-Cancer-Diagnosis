@@ -868,6 +868,7 @@ def terraform_init(module_dir, backend_config=None):
     terraform_exe = get_terraform_exe()
     cmd = [terraform_exe, "init", "-upgrade"]
     if backend_config:
+        ensure_backend_tf(module_dir)
         if (module_dir / "terraform.tfstate").exists():
             cmd.append("-migrate-state")
         else:
@@ -879,6 +880,16 @@ def terraform_init(module_dir, backend_config=None):
             f"-backend-config=key={backend_config['key']}",
         ])
     run(cmd, cwd=module_dir)
+
+
+def ensure_backend_tf(module_dir):
+    backend_path = module_dir / "backend.tf"
+    if backend_path.exists():
+        return
+    backend_path.write_text(
+        'terraform {\n  backend "azurerm" {}\n}\n',
+        encoding="utf-8",
+    )
 
 
 def terraform_apply(module_dir, backend_config=None):
