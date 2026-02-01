@@ -224,17 +224,36 @@ def write_resource_group_tfvars():
 
 def write_backend_tfvars():
     backend_dir = TERRAFORM_DIR / "00_backend"
+    container_name = env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])
+    if container_name is None:
+        container_name = DEFAULTS["BACKEND_CONTAINER_NAME"]
+    backend_rg, backend_storage = resolve_backend_names()
     write_tfvars(
         backend_dir / "terraform.tfvars",
         [
-            ("backend_resource_group_name", env_or_default("BACKEND_RESOURCE_GROUP_NAME", DEFAULTS["BACKEND_RESOURCE_GROUP_NAME"])),
+            ("backend_resource_group_name", backend_rg),
             ("backend_resource_group_name_prefix", env_or_default("BACKEND_RESOURCE_GROUP_NAME_PREFIX", DEFAULTS["BACKEND_RESOURCE_GROUP_NAME_PREFIX"])),
             ("location", env_or_default("LOCATION", DEFAULTS["LOCATION"])),
-            ("storage_account_name", env_or_default("BACKEND_STORAGE_ACCOUNT_NAME", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME"])),
+            ("storage_account_name", backend_storage),
             ("storage_account_name_prefix", env_or_default("BACKEND_STORAGE_ACCOUNT_NAME_PREFIX", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME_PREFIX"])),
-            ("container_name", env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])),
+            ("container_name", container_name),
         ],
     )
+
+
+def resolve_backend_names():
+    explicit_rg = env_or_default("BACKEND_RESOURCE_GROUP_NAME", DEFAULTS["BACKEND_RESOURCE_GROUP_NAME"])
+    explicit_storage = env_or_default("BACKEND_STORAGE_ACCOUNT_NAME", DEFAULTS["BACKEND_STORAGE_ACCOUNT_NAME"])
+    if explicit_rg and explicit_storage:
+        return explicit_rg, explicit_storage
+    subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID")
+    if not subscription_id:
+        raise RuntimeError("AZURE_SUBSCRIPTION_ID must be set to compute backend names.")
+    sub_compact = subscription_id.replace("-", "")
+    suffix = sub_compact[-6:]
+    rg_name = f"{DEFAULTS['BACKEND_RESOURCE_GROUP_NAME_PREFIX']}-{suffix}"
+    storage_name = f"{DEFAULTS['BACKEND_STORAGE_ACCOUNT_NAME_PREFIX']}{suffix}"
+    return rg_name, storage_name
 
 
 def write_storage_account_tfvars():
@@ -646,12 +665,10 @@ def write_aml_compute_tfvars():
 
 def backend_config_for(module_dir):
     backend_outputs = TERRAFORM_DIR / "00_backend" / "outputs.json"
-    backend_rg = read_outputs_value(backend_outputs, "backend_resource_group_name") or env_or_default(
-        "BACKEND_RESOURCE_GROUP_NAME", None
-    )
-    backend_storage = read_outputs_value(backend_outputs, "backend_storage_account_name") or env_or_default(
-        "BACKEND_STORAGE_ACCOUNT_NAME", None
-    )
+    backend_rg = read_outputs_value(backend_outputs, "backend_resource_group_name")
+    backend_storage = read_outputs_value(backend_outputs, "backend_storage_account_name")
+    if not backend_rg or not backend_storage:
+        backend_rg, backend_storage = resolve_backend_names()
     backend_container = read_outputs_value(backend_outputs, "backend_container_name") or env_or_default(
         "BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"]
     )
@@ -785,9 +802,7 @@ def main():
         else:
             backend_config = backend_config_for(module_dir)
             if os.environ.get("GITHUB_ACTIONS") == "true" and backend_config is None:
-                raise RuntimeError(
-                    "BACKEND_RESOURCE_GROUP_NAME and BACKEND_STORAGE_ACCOUNT_NAME must be set in CI to use remote state."
-                )
+                raise RuntimeError("Unable to resolve backend config for CI.")
         try:
             if module_dir.name == "15_machine_learning_workspace":
                 write_aml_workspace_tfvars()

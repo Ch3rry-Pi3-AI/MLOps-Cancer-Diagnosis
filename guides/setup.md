@@ -48,6 +48,9 @@ Note: this command does **not** change `AZURE_CREDENTIALS`. You do not need to u
      - `BACKEND_RESOURCE_GROUP_NAME` (e.g., `rg-mlops-cancer-tfstate`)
      - `BACKEND_STORAGE_ACCOUNT_NAME` (must be globally unique, lower-case, 3-24 chars)
      - Optional: `BACKEND_CONTAINER_NAME` (default `tfstate`)
+   - If you do not set the secrets, the scripts derive stable defaults from your subscription ID:
+     - `rg-mlops-cancer-tfstate-<last6>`
+     - `stmlopstfstate<last6>`
 
 ## Terraform Setup
 Check if Terraform is installed and on PATH:
