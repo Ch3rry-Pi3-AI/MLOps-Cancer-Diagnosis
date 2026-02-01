@@ -839,16 +839,23 @@ def ensure_role_assignment_import(module_dir, address, principal_id, scope, back
 
 
 def backend_config_for(module_dir):
-    backend_outputs = TERRAFORM_DIR / "00_backend" / "outputs.json"
-    backend_rg = read_outputs_value(backend_outputs, "backend_resource_group_name")
-    backend_storage = read_outputs_value(backend_outputs, "backend_storage_account_name")
-    if not backend_rg or not backend_storage:
-        backend_rg, backend_storage = resolve_backend_names()
-    backend_container = read_outputs_value(backend_outputs, "backend_container_name") or env_or_default(
-        "BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"]
-    )
-    if not backend_rg or not backend_storage or not backend_container:
-        return None
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        backend_rg = env_or_default("BACKEND_RESOURCE_GROUP_NAME", None)
+        backend_storage = env_or_default("BACKEND_STORAGE_ACCOUNT_NAME", None)
+        backend_container = env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])
+        if not backend_rg or not backend_storage:
+            return None
+    else:
+        backend_outputs = TERRAFORM_DIR / "00_backend" / "outputs.json"
+        backend_rg = read_outputs_value(backend_outputs, "backend_resource_group_name")
+        backend_storage = read_outputs_value(backend_outputs, "backend_storage_account_name")
+        if not backend_rg or not backend_storage:
+            backend_rg, backend_storage = resolve_backend_names()
+        backend_container = read_outputs_value(backend_outputs, "backend_container_name") or env_or_default(
+            "BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"]
+        )
+        if not backend_rg or not backend_storage or not backend_container:
+            return None
     return {
         "resource_group_name": backend_rg,
         "storage_account_name": backend_storage,
@@ -955,7 +962,6 @@ def main():
     load_env_file(ROOT / ".env")
 
     modules = [
-        TERRAFORM_DIR / "00_backend",
         TERRAFORM_DIR / "01_resource_group",
         TERRAFORM_DIR / "02_networking",
         TERRAFORM_DIR / "03_storage_account",
@@ -976,6 +982,8 @@ def main():
         TERRAFORM_DIR / "13_adf_pipeline_gold_dataflow",
         TERRAFORM_DIR / "14_adf_pipeline_master",
     ]
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        modules.insert(0, TERRAFORM_DIR / "00_backend")
     if args.rg_only:
         modules = [TERRAFORM_DIR / "01_resource_group"]
     if args.networking_only:
@@ -1033,7 +1041,15 @@ def main():
         else:
             backend_config = backend_config_for(module_dir)
             if os.environ.get("GITHUB_ACTIONS") == "true" and backend_config is None:
-                raise RuntimeError("Unable to resolve backend config for CI.")
+                raise RuntimeError("BACKEND_RESOURCE_GROUP_NAME and BACKEND_STORAGE_ACCOUNT_NAME must be set in CI.")
+            if backend_config:
+                print(
+                    "Using remote backend: "
+                    f"rg={backend_config['resource_group_name']} "
+                    f"sa={backend_config['storage_account_name']} "
+                    f"container={backend_config['container_name']} "
+                    f"key={backend_config['key']}"
+                )
         if module_dir.name == "01_resource_group":
             write_resource_group_tfvars()
         if module_dir.name == "02_networking":

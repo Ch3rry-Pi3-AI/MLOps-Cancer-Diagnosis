@@ -664,16 +664,23 @@ def write_aml_compute_tfvars():
 
 
 def backend_config_for(module_dir):
-    backend_outputs = TERRAFORM_DIR / "00_backend" / "outputs.json"
-    backend_rg = read_outputs_value(backend_outputs, "backend_resource_group_name")
-    backend_storage = read_outputs_value(backend_outputs, "backend_storage_account_name")
-    if not backend_rg or not backend_storage:
-        backend_rg, backend_storage = resolve_backend_names()
-    backend_container = read_outputs_value(backend_outputs, "backend_container_name") or env_or_default(
-        "BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"]
-    )
-    if not backend_rg or not backend_storage or not backend_container:
-        return None
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        backend_rg = env_or_default("BACKEND_RESOURCE_GROUP_NAME", None)
+        backend_storage = env_or_default("BACKEND_STORAGE_ACCOUNT_NAME", None)
+        backend_container = env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])
+        if not backend_rg or not backend_storage:
+            return None
+    else:
+        backend_outputs = TERRAFORM_DIR / "00_backend" / "outputs.json"
+        backend_rg = read_outputs_value(backend_outputs, "backend_resource_group_name")
+        backend_storage = read_outputs_value(backend_outputs, "backend_storage_account_name")
+        if not backend_rg or not backend_storage:
+            backend_rg, backend_storage = resolve_backend_names()
+        backend_container = read_outputs_value(backend_outputs, "backend_container_name") or env_or_default(
+            "BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"]
+        )
+        if not backend_rg or not backend_storage or not backend_container:
+            return None
     return {
         "resource_group_name": backend_rg,
         "storage_account_name": backend_storage,
@@ -758,6 +765,8 @@ def main():
         TERRAFORM_DIR / "02_networking",
         TERRAFORM_DIR / "01_resource_group",
     ]
+    if os.environ.get("GITHUB_ACTIONS") != "true" and args.destroy_backend:
+        modules.append(TERRAFORM_DIR / "00_backend")
     if args.destroy_backend:
         modules.append(TERRAFORM_DIR / "00_backend")
     if args.rg_only:
@@ -806,7 +815,7 @@ def main():
         else:
             backend_config = backend_config_for(module_dir)
             if os.environ.get("GITHUB_ACTIONS") == "true" and backend_config is None:
-                raise RuntimeError("Unable to resolve backend config for CI.")
+                raise RuntimeError("BACKEND_RESOURCE_GROUP_NAME and BACKEND_STORAGE_ACCOUNT_NAME must be set in CI.")
         try:
             if module_dir.name == "15_machine_learning_workspace":
                 write_aml_workspace_tfvars()

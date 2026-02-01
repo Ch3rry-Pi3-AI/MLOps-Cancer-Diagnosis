@@ -53,6 +53,26 @@ jobs:
       - name: Install deps
         run: uv sync
 
+      - name: Ensure backend (tfstate) exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          RG="${BACKEND_RESOURCE_GROUP_NAME}"
+          SA="${BACKEND_STORAGE_ACCOUNT_NAME}"
+          if ! az group show --name "$RG" >/dev/null 2>&1; then
+            echo "Creating backend RG/storage via terraform/00_backend"
+            pushd terraform/00_backend
+            terraform init -upgrade
+            terraform apply -auto-approve \
+              -var "backend_resource_group_name=$RG" \
+              -var "storage_account_name=$SA" \
+              -var "container_name=${BACKEND_CONTAINER_NAME:-tfstate}"
+            terraform output -json > outputs.json
+            popd
+          else
+            echo "Backend RG exists. Skipping backend creation."
+          fi
+
       - name: Deploy infra
         run: uv run python scripts/deploy.py --skip-adf-run
 
