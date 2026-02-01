@@ -688,7 +688,8 @@ def terraform_init(module_dir, backend_config=None):
     if backend_config:
         if (module_dir / "terraform.tfstate").exists():
             cmd.append("-migrate-state")
-        cmd.append("-reconfigure")
+        else:
+            cmd.append("-reconfigure")
         cmd.extend([
             f"-backend-config=resource_group_name={backend_config['resource_group_name']}",
             f"-backend-config=storage_account_name={backend_config['storage_account_name']}",
