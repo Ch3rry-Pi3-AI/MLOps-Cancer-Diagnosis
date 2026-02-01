@@ -309,6 +309,27 @@ def ensure_backend_container(backend_rg, backend_storage, container_name):
     )
 
 
+def backend_resource_group_exists(backend_rg):
+    az_cmd = get_az_cmd()
+    try:
+        subprocess.check_output([az_cmd, "group", "show", "--name", backend_rg], text=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def backend_storage_exists(backend_rg, backend_storage):
+    az_cmd = get_az_cmd()
+    try:
+        subprocess.check_output(
+            [az_cmd, "storage", "account", "show", "--resource-group", backend_rg, "--name", backend_storage],
+            text=True,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 def write_backend_outputs_from_env(backend_rg, backend_storage, backend_container):
     outputs = {
         "backend_resource_group_name": {"value": backend_rg},
@@ -1001,9 +1022,10 @@ def main():
             backend_rg, backend_storage = resolve_backend_names()
             backend_container = env_or_default("BACKEND_CONTAINER_NAME", DEFAULTS["BACKEND_CONTAINER_NAME"])
             if os.environ.get("GITHUB_ACTIONS") == "true" and backend_rg and backend_storage:
-                ensure_backend_container(backend_rg, backend_storage, backend_container)
-                write_backend_outputs_from_env(backend_rg, backend_storage, backend_container)
-                continue
+                if backend_resource_group_exists(backend_rg) and backend_storage_exists(backend_rg, backend_storage):
+                    ensure_backend_container(backend_rg, backend_storage, backend_container)
+                    write_backend_outputs_from_env(backend_rg, backend_storage, backend_container)
+                    continue
         else:
             backend_config = backend_config_for(module_dir)
             if os.environ.get("GITHUB_ACTIONS") == "true" and backend_config is None:
