@@ -2,6 +2,8 @@
 
 Terraform-first Azure MLOps infrastructure with a modular folder layout. We will add resources one at a time; the first module provisions the resource group.
 
+![System design](img/system_design.png)
+
 ## Dataset
 This project uses the UCI Breast Cancer dataset stored locally under `data/`.
 
@@ -79,6 +81,7 @@ Note: this command does **not** change `AZURE_CREDENTIALS`. You do not need to u
    - If you do not set the secrets, the scripts derive stable defaults from your subscription ID:
      - `rg-mlops-cancer-tfstate-<last6>`
      - `stmlopstfstate<last6>`
+   - The deploy/destroy scripts automatically create a `backend.tf` in each Terraform module at runtime so state is written to the Azure backend (no manual backend blocks needed).
 
 Workflows:
 - `.github/workflows/ci.yml`
@@ -96,23 +99,23 @@ Override by setting explicit name variables or adjusting the prefixes in `.env` 
 - `terraform/00_backend`: Remote Terraform state (storage account + container)
 - `terraform/01_resource_group`: Azure resource group
 - `terraform/02_networking`: VNet + subnets (foundation for private endpoints)
-- `terraform/03_storage_account`: ADLS Gen2 storage account + containers
-- `terraform/04_key_vault`: Azure Key Vault
-- `terraform/05_log_analytics_app_insights`: Log Analytics + Application Insights
-- `terraform/06_container_registry`: Azure Container Registry (ACR)
-- `terraform/07_data_factory`: Azure Data Factory (system-assigned identity)
-- `terraform/08_adf_linked_services`: ADF linked services (HTTP + ADLS Gen2)
-- `terraform/09_adf_pipeline_http`: ADF pipeline to land raw dataset into ADLS bronze
-- `terraform/10_adf_dataflow_bronze_silver`: ADF mapping data flow for bronze -> silver cleanup
-- `terraform/11_adf_pipeline_silver_dataflow`: ADF pipeline to execute bronze -> silver data flow
-- `terraform/12_adf_dataflow_silver_gold`: ADF mapping data flow for silver -> gold feature encoding
-- `terraform/13_adf_pipeline_gold_dataflow`: ADF pipeline to execute silver -> gold data flow
-- `terraform/14_adf_pipeline_master`: ADF master pipeline (ingest -> silver -> gold)
-- `terraform/15_machine_learning_workspace`: Azure ML workspace (v2)
-- `terraform/16_aml_storage_account`: Non-HNS storage account for AML workspace
-- `terraform/17_aml_compute`: AML compute cluster
-- `terraform/18_acr_rbac`: AcrPull for AML compute identity
-- `terraform/19_storage_rbac`: Storage Blob Data Contributor for AML compute identity
+- `terraform/02_storage_account`: ADLS Gen2 storage account + containers
+- `terraform/03_key_vault`: Azure Key Vault
+- `terraform/04_log_analytics_app_insights`: Log Analytics + Application Insights
+- `terraform/05_container_registry`: Azure Container Registry (ACR)
+- `terraform/06_data_factory`: Azure Data Factory (system-assigned identity)
+- `terraform/07_adf_linked_services`: ADF linked services (HTTP + ADLS Gen2)
+- `terraform/08_adf_pipeline_http`: ADF pipeline to land raw dataset into ADLS bronze
+- `terraform/09_adf_dataflow_bronze_silver`: ADF mapping data flow for bronze -> silver cleanup
+- `terraform/10_adf_pipeline_silver_dataflow`: ADF pipeline to execute bronze -> silver data flow
+- `terraform/11_adf_dataflow_silver_gold`: ADF mapping data flow for silver -> gold feature encoding
+- `terraform/12_adf_pipeline_gold_dataflow`: ADF pipeline to execute silver -> gold data flow
+- `terraform/13_adf_pipeline_master`: ADF master pipeline (ingest -> silver -> gold)
+- `terraform/14_machine_learning_workspace`: Azure ML workspace (v2)
+- `terraform/15_aml_storage_account`: Non-HNS storage account for AML workspace
+- `terraform/16_aml_compute`: AML compute cluster
+- `terraform/17_acr_rbac`: AcrPull for AML compute identity
+- `terraform/18_storage_rbac`: Storage Blob Data Contributor for AML compute identity
 - `docker/train`: Training image Dockerfile + requirements
 - `docker/inference`: Inference image Dockerfile + requirements
 - `src/training`: Training/evaluation/register scripts
@@ -187,23 +190,23 @@ After each apply, module outputs are written to the module folder, for example:
 - `terraform/00_backend/outputs.json`
 - `terraform/01_resource_group/outputs.json`
 - `terraform/02_networking/outputs.json`
-- `terraform/03_storage_account/outputs.json`
-- `terraform/04_key_vault/outputs.json`
-- `terraform/05_log_analytics_app_insights/outputs.json`
-- `terraform/06_container_registry/outputs.json`
-- `terraform/07_data_factory/outputs.json`
-- `terraform/08_adf_linked_services/outputs.json`
-- `terraform/09_adf_pipeline_http/outputs.json`
-- `terraform/10_adf_dataflow_bronze_silver/outputs.json`
-- `terraform/11_adf_pipeline_silver_dataflow/outputs.json`
-- `terraform/12_adf_dataflow_silver_gold/outputs.json`
-- `terraform/13_adf_pipeline_gold_dataflow/outputs.json`
-- `terraform/14_adf_pipeline_master/outputs.json`
-- `terraform/15_machine_learning_workspace/outputs.json`
-- `terraform/16_aml_storage_account/outputs.json`
-- `terraform/17_aml_compute/outputs.json`
-- `terraform/18_acr_rbac/outputs.json`
-- `terraform/19_storage_rbac/outputs.json`
+- `terraform/02_storage_account/outputs.json`
+- `terraform/03_key_vault/outputs.json`
+- `terraform/04_log_analytics_app_insights/outputs.json`
+- `terraform/05_container_registry/outputs.json`
+- `terraform/06_data_factory/outputs.json`
+- `terraform/07_adf_linked_services/outputs.json`
+- `terraform/08_adf_pipeline_http/outputs.json`
+- `terraform/09_adf_dataflow_bronze_silver/outputs.json`
+- `terraform/10_adf_pipeline_silver_dataflow/outputs.json`
+- `terraform/11_adf_dataflow_silver_gold/outputs.json`
+- `terraform/12_adf_pipeline_gold_dataflow/outputs.json`
+- `terraform/13_adf_pipeline_master/outputs.json`
+- `terraform/14_machine_learning_workspace/outputs.json`
+- `terraform/15_aml_storage_account/outputs.json`
+- `terraform/16_aml_compute/outputs.json`
+- `terraform/17_acr_rbac/outputs.json`
+- `terraform/18_storage_rbac/outputs.json`
 
 ## Azure ML (local build + job)
 Build and push a training image:

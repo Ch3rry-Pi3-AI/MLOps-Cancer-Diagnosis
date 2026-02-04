@@ -81,10 +81,10 @@ jobs:
         run: |
           set -euo pipefail
           RG_NAME=$(jq -r '.resource_group_name.value' terraform/01_resource_group/outputs.json)
-          ADF_NAME=$(jq -r '.data_factory_name.value' terraform/07_data_factory/outputs.json)
-          ADF_PIPELINE=$(jq -r '.pipeline_name.value' terraform/14_adf_pipeline_master/outputs.json)
-          STORAGE_NAME=$(jq -r '.storage_account_name.value' terraform/03_storage_account/outputs.json)
-          STORAGE_KEY=$(jq -r '.storage_account_primary_access_key.value' terraform/03_storage_account/outputs.json)
+          ADF_NAME=$(jq -r '.data_factory_name.value' terraform/06_data_factory/outputs.json)
+          ADF_PIPELINE=$(jq -r '.pipeline_name.value' terraform/13_adf_pipeline_master/outputs.json)
+          STORAGE_NAME=$(jq -r '.storage_account_name.value' terraform/02_storage_account/outputs.json)
+          STORAGE_KEY=$(jq -r '.storage_account_primary_access_key.value' terraform/02_storage_account/outputs.json)
 
           run_id=$(az datafactory pipeline create-run \
             --resource-group "$RG_NAME" \
